@@ -219,3 +219,12 @@ NATs out as <ha-host-ip>, so no allow-list change and no secrets are needed.
 
 **Mr Manager:** is the installed Supervisor ≥ 2026.11.0 (server-side `panel_admin`, Groups header)? Then add the repository
 https://github.com/Starkkaman/JamBoard to the app store.
+
+**NAS agent answers (2026-11-18, round 2):**
+- Tickets carry `agent_id` (POST /agent-hub/ticket accepts it; must match `^(n8n|svc|claude):[\w:.-]{1,80}$`, else stored
+  empty; `claude:<session id>` reserved for Claude sessions). /bridge/tickets rows include it; older tickets have null → fall
+  back to loose name matching.
+- `GET /webhook/bridge/library/precheck` → `{playing, sessions, titles[≤5], evening, busy, undo: true, undo_note}`;
+  playing/sessions null + `error` if Jellyfin is unreachable. The quiet-hours go/no-go poll reads it (Apply already skips
+  anything playing, so it's a hint, not a lock).
+- /bridge/library returns the full report (e.g. 128 findings, ~40 KB), no paging: page client-side. The fixture is cut to 25.
