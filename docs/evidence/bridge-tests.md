@@ -9,9 +9,9 @@ stay in `~/.claude/projects/<project-key>/` because `claude rm` doesn't delete t
 
 | bg id | sessionId | CCR session | started as | ended by |
 |---|---|---|---|---|
-| 6c1f7b06 | 6c1f7b06-… | session_01… | orchestrator, auto mode; respawned by the daemon after the CLI update | SIGINT (C2), then `claude rm` |
-| ea478e73 | ea478e73-… | session_01… | `--permission-mode default`, PermissionRequest/AskUserQuestion test hooks | SIGINT mid-turn (C2b), then `claude rm` |
-| 33ba1bc5 | 33ba1bc5-… | session_01… | copy made by `claude --bg --resume 6c1f7b06… <flags>` | `claude stop` (C4), SIGTERM (C3), stop, `claude rm` |
+| 6c1f7b06 | `6c1f7b06-…` | `session_01…` | orchestrator, auto mode; respawned by the daemon after the CLI update | SIGINT (C2), then `claude rm` |
+| ea478e73 | `ea478e73-…` | `session_01…` | `--permission-mode default`, PermissionRequest/AskUserQuestion test hooks | SIGINT mid-turn (C2b), then `claude rm` |
+| 33ba1bc5 | `33ba1bc5-…` | `session_01…` | copy made by `claude --bg --resume 6c1f7b06… <flags>` | `claude stop` (C4), SIGTERM (C3), stop, `claude rm` |
 
 Helper scripts used: `peer.py` (lookup + one inbox frame), `busytest.py`, `permhook.py` (PermissionRequest/PreToolUse hook
 that waits for a decision file), `attach_keys.py` (runs `claude attach` in a pty and sends keys), `statuslog.sh`. They are in

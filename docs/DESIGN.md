@@ -5,7 +5,7 @@ Status: **proposal, nothing built, no HA changes made.** Decisions needed are li
 ## 1. Architecture
 
 ```
- EACH MACHINE (NAS container, Mac, Linux box)                          HOME ASSISTANT (<ha-host-ip>)
+ EACH MACHINE (NAS container, Mac, Linux box)                          HOME ASSISTANT (<ha-host>)
  ┌───────────────────────────────────────────────────────┐            ┌──────────────────────────────────────────┐
  │ Claude Code sessions (Remote Control, CLI, --bg)       │            │ Mosquitto (existing, :1883 LAN)           │
  │   │ hooks (plugin): SessionStart, UserPromptSubmit,    │            │   ▲                    │                  │

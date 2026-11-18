@@ -21,7 +21,7 @@ possible" into concrete rules for Crew Flow (see `../CREW-FLOW.md`). Aggregates 
 - **"Carried" cost** = a content's tokens × (write price + number of later requests × cache-read price). This is
   what a tool result or report costs over the rest of its context's life. It ignores compaction (only 3
   compactions happened, all in orchestrators).
-- **Scripts**: `<session scratchpad>/efficiency/`
+- **Scripts**: `<session scratchpad>/efficiency/` (local only)
   (`analyze_lib.py`, `analyze.py`, `analyze2..7.py`, `simulate_split.py`, `simulate_orch.py`; outputs in `out*.txt`).
 
 ## Measured numbers
