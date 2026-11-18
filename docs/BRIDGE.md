@@ -114,7 +114,8 @@ applied[]}`, `job {id, kind, state, detail}`, and a `: ping` comment every 20 s 
 - **Allow-list by construction** (like Callsheet's `ha.py`): only the nine (method, path) pairs of the NAS contract under `n8n_url`.
   No redirects, no secrets, bodies ≤1 MB (status 2 MB). The first response after a start is logged once (HTTP status only) as
   `n8n.firstContact`, which settles verification 4. Timeouts: GETs 15 s, chat **120 s**, ticket POSTs 20 s, apply **900 s**.
-  One request in flight per endpoint (shared). Errors back off ×2 up to 5 min, with "n8n unreachable since …" over the `cache` copy.
+  One request in flight per endpoint (shared; a tick is skipped while the previous call is open). Errors: agent-hub/status retries
+  every 60 s (NAS agent's request), the others back off ×2 up to 5 min; "n8n unreachable since …" shows over the `cache` copy.
 
 | GET | visible | nobody watching | also |
 |---|---|---|---|
@@ -211,8 +212,8 @@ way.) 2. Should any HA admin be able to write, or only you? (Default: any admin,
 crew-hubd and every machine's plugin updated together. Do that, or keep "Isaac"? 4. For v2: start sessions here, markdown in
 replies, a replayed summary after long gaps? Each view's layout is a separate Jam design task (`design/callsheet-harmony/`).
 
-**NAS agent:** 1. Every status GET is an n8n execution ("Agent Hub: Status" ran 0 min ago). At 30 s while visible that is up to
-~2.9k a day: OK for pruning, or should we use 60 s? 2. Is there a maximum chat `query` length? Can `agent` take the id (a rename
+**NAS agent:** 1. Answered 2026-11-18: the cadences are fine; successful executions of "Agent Hub: Status" and "The Bridge: API"
+are no longer saved; no push (the add-on stays inbound-free). 2. Is there a maximum chat `query` length? Can `agent` take the id (a rename
 would orphan threads)? 3. Can `bridge/inbox` take `?after=<id>`? 4. Which source IP does the allow-list see from the HA host (we
 expect <ha-host-ip>, never 172.30.32.0/23)?
 
