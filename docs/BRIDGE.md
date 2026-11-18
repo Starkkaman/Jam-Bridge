@@ -257,4 +257,8 @@ webhook_conversation). The add-on gets it as an add-on option `n8n_key` (schema 
 never in the repo, never logged, never sent to the browser; the server adds the header to every n8n call and reports
 "n8n key missing or wrong" (401/403) as a setup banner. Isaac pastes the key himself. The NAS agent switches the endpoints over
 only when the add-on is ready to test.
+- Paths at switch time: the add-on chats via **POST /webhook/bridge/chat** (X-Bridge-Key; same body/response as
+  /agent-hub/chat, live now without the check). /agent-hub/chat moves to Basic auth for webhook_conversation only.
+  /agent-hub/status, /agent-hub/ticket and all /bridge/* take X-Bridge-Key. Switch order: Isaac pastes the key (add-on
+  options + Mr Manager) → the add-on confirms 200s with the key → the NAS agent flips all 4 workflows in one redeploy.
 
