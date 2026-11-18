@@ -228,3 +228,13 @@ https://github.com/Starkkaman/JamBoard to the app store.
   playing/sessions null + `error` if Jellyfin is unreachable. The quiet-hours go/no-go poll reads it (Apply already skips
   anything playing, so it's a hint, not a lock).
 - /bridge/library returns the full report (e.g. 128 findings, ~40 KB), no paging: page client-side. The fixture is cut to 25.
+
+**Isaac's decisions (2026-11-18):**
+1. "Apply all safe" = low-severity `replace_trailer` findings (undoable).
+2. An offline machine is quiet (dashed "Offline") UNLESS it misses a scheduled task: then it's an alert. Source: Claude Code
+   puts `session_crons` in the Stop/SubagentStop hook payload (seen in docs/evidence/hooks-2.1.295-sample.jsonl, empty there);
+   crew-hook keeps its schedule fields (no prompt text), crew-hubd publishes `session.crons[{id, schedule, nextRunAt}]`, and the
+   Bridge alerts when a machine is offline past a cron's nextRunAt. Field shape to verify on the current CLI before building.
+3. Theme setting: Follow HA (default) / Night / Day, stored per HA user in the add-on's settings table.
+4. Chat history kept 90 days (nightly prune of messages older than 90 days; threads with no messages left are removed).
+
