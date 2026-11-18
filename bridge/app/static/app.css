@@ -243,6 +243,8 @@ select.inp{appearance:none;background-image:linear-gradient(45deg,transparent 50
 .keys{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .tag{font:600 13px/1 var(--f-plate);letter-spacing:.12em;text-transform:uppercase;color:var(--dm);display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
 .tag.caut-t{color:var(--caut)}
+/* tickets the Engineer hands back: caution = amber + ▲ + the word */
+.li .s .cw,.mc .plate.caut-t{color:var(--caut)} .li .s .cw::before,.mc .plate.caut-t::before{content:"▲ "}
 .logw{display:grid;gap:3px}
 .logw .ln{display:grid;grid-template-columns:44px minmax(0,1fr);gap:10px}
 .logw .t{color:color-mix(in srgb,var(--wtx) 62%,var(--well))}

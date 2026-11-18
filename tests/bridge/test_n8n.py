@@ -142,6 +142,8 @@ def test_agent_grouping_and_ticket_matching():
     assert "Download Watcher" in names["agents"] and "Security Weekly Review" in names["agents"]
     assert all(a["id"].startswith("svc:") for a in g["services"])
     assert not any(a["hasRuns"] for a in g["system"])
+    for name in ("Engineer: notify", "Engineer: dispatch"):  # the Engineer's n8n side is plumbing
+        assert agents.group_of({"id": "n8n:wfEngineer01", "name": name}) == "system"
     all_agents = status["agents"]
     assert agents.match_agent("Jellyfin library agent", all_agents) == "svc:media-agent"
     assert agents.match_agent("Library", all_agents) == "svc:media-agent"

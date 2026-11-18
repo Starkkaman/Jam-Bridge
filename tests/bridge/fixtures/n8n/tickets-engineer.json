@@ -1,0 +1,30 @@
+[
+  {
+    "id": 12,
+    "type": "bug",
+    "agent": "Download Watcher",
+    "agent_id": null,
+    "title": "Watcher posts the same finished download twice",
+    "details": "Every finished download shows up twice in the phone notifications, about a minute apart.",
+    "status": "awaiting_approval",
+    "source": "The Bridge · Alex",
+    "resolution": null,
+    "comments": "[{\"at\":\"2026-11-18T09:12:40.000Z\",\"author\":\"Engineer\",\"text\":\"Picked this up. The watcher fires on both the 'completed' and the 'imported' event.\"},{\"at\":\"2026-11-18T09:31:05.000Z\",\"author\":\"Engineer\",\"text\":\"Fix ready in the sandbox: the watcher now notifies on 'imported' only, and keeps the last 50 ids so a repeat is dropped. Tested with three sample events; one notification each.\"}]",
+    "createdAt": "2026-11-18T09:05:00.000Z",
+    "updatedAt": "2026-11-18T09:31:05.000Z"
+  },
+  {
+    "id": 11,
+    "type": "feature",
+    "agent": "Jellyfin library agent",
+    "agent_id": "svc:media-agent",
+    "title": "Skip extras folders in the nightly scan",
+    "details": "Behind-the-scenes and extras folders keep showing up as naming findings.",
+    "status": "needs_isaac",
+    "source": "The Bridge · Alex",
+    "resolution": null,
+    "comments": "[{\"at\":\"2026-11-18T08:40:00.000Z\",\"author\":\"Alex\",\"text\":\"Extras are fine as they are, please just leave them out.\"},{\"at\":\"2026-11-18T08:52:18.000Z\",\"author\":\"Engineer\",\"text\":\"Two ways to do this: skip any folder named Extras or Featurettes, or skip everything under a folder marked with an .ignore file. Which one do you want?\"}]",
+    "createdAt": "2026-11-18T08:31:00.000Z",
+    "updatedAt": "2026-11-18T08:52:18.000Z"
+  }
+]

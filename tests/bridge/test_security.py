@@ -144,7 +144,7 @@ async def test_static_no_traversal_no_redirect(bridge_factory, tmp_path):
     b = await bridge_factory(static_dir=static)
     r = await b.req("GET", "/")
     assert r.status == 200 and f"app.css?v={api.APP_VERSION}" in await r.text()
-    r = await b.req("GET", "/app.css?v=0.1.2")
+    r = await b.req("GET", "/app.css?v=0.1.3")
     assert r.status == 200 and "max-age=604800" in r.headers["Cache-Control"]
     for p in ("/../secret.txt", "/%2e%2e/secret.txt", "/static/../../secret.txt"):
         r = await b.req("GET", p, allow_redirects=False)

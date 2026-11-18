@@ -164,6 +164,28 @@ def test_comments_parsing_and_ticket_upsert(tmp_path):
     db.close()
 
 
+def test_ticket_status_groups(tmp_path):
+    from bridge.app.db import TICKET_STATUSES, ticket_group
+
+    assert TICKET_STATUSES == ("open", "in_progress", "needs_isaac", "awaiting_approval", "done", "closed")
+    assert {s: ticket_group(s) for s in TICKET_STATUSES} == {
+        "open": "open", "in_progress": "progress", "needs_isaac": "needs", "awaiting_approval": "needs",
+        "done": "done", "closed": "done"}
+    assert ticket_group(None) == "open" and ticket_group("resolved") == "done" and ticket_group("odd") == "open"
+    db = open_db(tmp_path)
+    rows = [{"id": 1, "title": "a", "status": "open", "updatedAt": "2026-11-18T10:00:00.000Z"},
+            {"id": 2, "title": "b", "status": "awaiting_approval", "updatedAt": "2026-11-18T09:00:00.000Z",
+             "comments": '[{"at":"2026-11-18T09:00:00.000Z","author":"Engineer","text":"ready"},'
+                         '{"at":"2026-11-18T09:01:00.000Z","author":"Alex","text":"looking"}]'},
+            {"id": 3, "title": "c", "status": "needs_isaac", "updatedAt": "2026-11-18T08:00:00.000Z"}]
+    db.upsert_tickets(rows)
+    need = db.tickets_needing_you()
+    assert [t["id"] for t in need] == [3, 2]
+    assert need[0]["last"] is None and need[1]["last"]["text"] == "ready"  # the last agent comment, not the human's
+    assert db.tickets_with_new_agent_comment("u1") == [2]
+    db.close()
+
+
 async def test_nightly_prune_schedule(bridge):
     s = bridge.jobs.seconds_to_next_prune()
     assert 0 < s <= 86400

@@ -122,6 +122,25 @@ def parse_comments(raw):
     return out, None
 
 
+# Ticket statuses n8n accepts (bridge/ticket-update). The Engineer (an OpenCode agent on the ticket inbox) sets
+# needs_isaac when it wants direction and awaiting_approval when a sandboxed fix is ready for review.
+TICKET_STATUSES = ("open", "in_progress", "needs_isaac", "awaiting_approval", "done", "closed")
+TICKET_NEEDS_YOU = ("needs_isaac", "awaiting_approval")
+AGENT_AUTHORS = frozenset({"NAS agent", "Engineer"})  # any other comment author is the human (HA user name)
+
+
+def ticket_group(status):
+    """n8n status -> the page's filter group: open | needs | progress | done."""
+    s = str(status or "").strip().lower()
+    if s in TICKET_NEEDS_YOU:
+        return "needs"
+    if s in ("done", "closed", "resolved"):
+        return "done"
+    if s in ("in_progress", "in progress", "progress"):
+        return "progress"
+    return "open"
+
+
 class DB:
     def __init__(self, path, clock):
         self.path = pathlib.Path(path)
@@ -414,6 +433,7 @@ class DB:
         c = json.loads(r["comments_json"] or '{"list": [], "raw": null}')
         return {"id": r["id"], "type": r["type"], "agent": r["agent"], "agentId": r["agent_id"],
                 "agentMatch": r["agent_match"], "title": r["title"], "details": r["details"], "status": r["status"],
+                "group": ticket_group(r["status"]),
                 "source": r["source"], "resolution": r["resolution"], "comments": c.get("list") or [],
                 "commentsRaw": c.get("raw"), "createdAt": r["created_at"], "updatedAt": r["updated_at"]}
 
@@ -430,9 +450,22 @@ class DB:
         for t in self.list_tickets():
             for c in t["comments"]:
                 at = iso_to_ms(c.get("at")) or 0
-                if c.get("author") == "NAS agent" and at > since:
+                if c.get("author") in AGENT_AUTHORS and at > since:
                     out.append(t["id"])
                     break
+        return out
+
+    def tickets_needing_you(self):
+        """Tickets the Engineer handed back (needs_isaac / awaiting_approval), oldest update first, for Now."""
+        out = []
+        for t in self.list_tickets():
+            if t["group"] != "needs":
+                continue
+            last = next((c for c in reversed(t["comments"]) if c.get("author") in AGENT_AUTHORS), None)
+            out.append({"id": t["id"], "title": t["title"], "status": t["status"], "agent": t["agent"],
+                        "agentId": t["agentMatch"], "since": t["updatedAt"] or t["createdAt"],
+                        "last": {k: last.get(k) for k in ("at", "author", "text")} if last else None})
+        out.sort(key=lambda x: (x["since"] or 0, x["id"]))
         return out
 
     # ---- inbox ----------------------------------------------------------------------------------------------------

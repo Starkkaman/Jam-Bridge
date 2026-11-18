@@ -6,13 +6,15 @@
                                                          X-Remote-User-* act as the admin "Alex")
 - http://127.0.0.1:8100/api/hassio_ingress/dev-token/    the same through a mini ingress proxy (prefix stripped,
                                                          X-Remote-User-* injected, SSE streamed): checks relative URLs
-- fake n8n on :8098 (fixtures from tests/bridge/fixtures/n8n), fake Core websocket on :8097
+- fake n8n on :8098 (fixtures from tests/bridge/fixtures/n8n, plus the invented Engineer tickets in
+  tickets-engineer.json), fake Core websocket on :8097
 
 See bridge/DEV.md. Nothing here is used by the add-on image.
 """
 
 import argparse
 import asyncio
+import json
 import os
 import pathlib
 import sys
@@ -88,6 +90,7 @@ async def main():
     n8n_port, core_port, proxy_port = a.port - 1, a.port - 2, a.port + 1
 
     fake_n8n = FakeN8n(scale=a.scale, require_key=DEV_KEY if a.require_key else None)
+    fake_n8n.tickets[:0] = json.loads((HERE / "fixtures" / "n8n" / "tickets-engineer.json").read_text())
     fake_core = FakeCore(token=DEV_TOKEN, scale=a.scale)
     os.environ.update({
         "BRIDGE_DEV": "1", "BRIDGE_DATA": str(data), "BRIDGE_OPTIONS": str(data / "options.json"),

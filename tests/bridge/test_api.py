@@ -7,6 +7,7 @@ import pytest
 
 from bridge.app import api
 from conftest import ADMIN, W, cid, wait_for
+from fake_n8n import FIX
 
 
 class SSE:
@@ -71,7 +72,7 @@ async def test_state_shape(bridge, fake_n8n):
     assert d["version"] == api.APP_VERSION
     assert d["user"] == {"id": "u-alex", "name": "alex", "display": "Alex", "canWrite": True}
     assert set(d["health"]["n8n"]) >= {"ok", "at", "error"} and d["health"]["crew"]["connected"] is True
-    assert set(d["unread"]) == {"threads", "inbox", "tickets", "library"}
+    assert set(d["unread"]) == {"threads", "inbox", "tickets", "library", "ticketsNeedYou"}
     assert d["settings"]["theme"] == "follow_ha"
 
 
@@ -84,6 +85,7 @@ async def test_overview_crew_tasks_after_polls(bridge, fake_n8n):
     assert {w["status"] for w in waiting} == {"waiting"} and len(waiting) == 2
     assert d["needsYou"]["problems"] == [] and d["needsYou"]["agents"] == []
     assert d["needsYou"]["tickets"] == [1]  # ticket 1 has a "NAS agent" comment
+    assert d["needsYou"]["ticketsNeedYou"] == []
     assert d["needsYou"]["findings"] == 12
     assert d["running"]["n8n"] == [] and len(d["running"]["claude"]) == 3
     r, d = await bridge.get("/api/crew")
@@ -102,7 +104,7 @@ async def test_overview_crew_tasks_after_polls(bridge, fake_n8n):
     assert d["report"]["date"] == "2026-11-18" and len(d["safeIds"]) == 12
     assert d["quietHours"] == {"from": "17:00", "to": "01:00"}
     r, d = await bridge.get("/api/state")
-    assert d["unread"] == {"threads": 0, "inbox": 4, "tickets": 1, "library": 12}
+    assert d["unread"] == {"threads": 0, "inbox": 4, "tickets": 1, "library": 12, "ticketsNeedYou": 0}
     r, _ = await bridge.post("/api/read", {"scope": "inbox"})
     assert r.status == 200
     r, d = await bridge.get("/api/state")
@@ -436,6 +438,60 @@ async def test_ticket_create_update_and_limits(bridge, fake_n8n):
     assert r.status == 409 and d["code"] == "refused"
     kinds = [(a["kind"], a["outcome"]) for a in await bridge.db.a("list_actions")]
     assert ("ticket.create", "ok") in kinds and ("ticket.update", "ok") in kinds and ("ticket.update", "refused") in kinds
+
+
+def engineer_tickets(fake_n8n):
+    fake_n8n.tickets[:0] = json.loads((FIX / "tickets-engineer.json").read_text())
+
+
+async def test_engineer_tickets_need_you(bridge, fake_n8n):
+    engineer_tickets(fake_n8n)
+    await bridge.jobs.pollers["tickets"].tick()
+    r, d = await bridge.get("/api/tickets")
+    t = {x["id"]: x for x in d["tickets"]}
+    assert t[11]["group"] == t[12]["group"] == "needs" and t[1]["group"] == "done"
+    assert set(d["newAgentComments"]) == {1, 11, 12}  # "Engineer" comments are agent replies, like "NAS agent"
+    r, d = await bridge.get("/api/tickets?status=awaiting_approval")
+    assert [x["id"] for x in d["tickets"]] == [12]
+    r, d = await bridge.get("/api/overview")
+    need = d["needsYou"]["ticketsNeedYou"]
+    assert [x["id"] for x in need] == [11, 12]  # oldest update first
+    assert need[0]["status"] == "needs_isaac" and need[0]["agentId"] == "svc:media-agent"
+    assert need[0]["last"]["author"] == "Engineer" and need[0]["last"]["text"].startswith("Two ways")
+    assert need[1]["status"] == "awaiting_approval" and need[1]["last"]["text"].startswith("Fix ready")
+    r, d = await bridge.get("/api/state")
+    assert d["unread"]["ticketsNeedYou"] == 2
+
+
+async def test_ticket_status_values(bridge, fake_n8n):
+    engineer_tickets(fake_n8n)
+    for st in ("open", "in_progress", "needs_isaac", "awaiting_approval", "done", "closed"):
+        r, d = await bridge.post("/api/tickets/11", {"status": st, "clientId": cid()})
+        assert r.status == 200, st
+        assert [p for p in fake_n8n.posts if p["path"] == "agent-hub/ticket"][-1]["body"]["status"] == st
+    for st in ("resolved", "waiting", "Open", 3):
+        r, d = await bridge.post("/api/tickets/11", {"status": st, "clientId": cid()})
+        assert r.status == 400 and d["code"] == "invalid", st
+
+
+async def test_ticket_approve(bridge, fake_n8n):
+    engineer_tickets(fake_n8n)
+    await bridge.jobs.pollers["tickets"].tick()
+    posts = lambda: [p for p in fake_n8n.posts if p["path"] == "agent-hub/ticket"]  # noqa: E731
+    r, d = await bridge.post("/api/tickets/11", {"approve": True, "clientId": cid()})  # needs_isaac: nothing to approve
+    assert r.status == 409 and d["code"] == "not_awaiting" and not posts()
+    r, d = await bridge.post("/api/tickets/12", {"approve": True, "comment": "x", "clientId": cid()})
+    assert r.status == 400 and not posts()
+    r, d = await bridge.post("/api/tickets/12", {"approve": True, "clientId": cid()})
+    assert r.status == 200 and d["ok"] is True
+    assert posts()[-1]["body"] == {"action": "update", "id": 12, "author": "Alex", "source": "The Bridge · Alex",
+                                   "comment": "Approved"}
+    acts = await bridge.db.a("list_actions")
+    assert any(a["kind"] == "ticket.update" and a["summary"] == "approve" and a["outcome"] == "ok" for a in acts)
+    # Request changes is a plain comment
+    r, d = await bridge.post("/api/tickets/12", {"comment": "Keep the last 200 ids", "clientId": cid()})
+    assert r.status == 200 and posts()[-1]["body"]["comment"] == "Keep the last 200 ids"
+    assert "status" not in posts()[-1]["body"]
 
 
 async def test_ticket_n8n_down(bridge, fake_n8n):

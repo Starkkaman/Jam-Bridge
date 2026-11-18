@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.3
+
+- Tickets support the Engineer (an OpenCode agent on the ticket inbox): new statuses "Needs you" (needs_isaac) and
+  "Ready to review" (awaiting_approval) with caution lamps, a Needs you filter, and "Engineer" comments shown as agent
+  replies.
+- Ready to review: Approve posts "Approved" as you, then reminds you to approve the deploy in OpenCode; Request changes
+  sends what should change. Needs you: the comment box is ready for your direction.
+- Tickets that need you count in Now's needs-you count and show as Now panels after the Claude prompts.
+- The server accepts only the six n8n ticket statuses. "Engineer: notify" and "Engineer: dispatch" are system workflows.
+
 ## 0.1.2
 
 - Live updates no longer move the page: the scroll position holds through every re-render (it used to jump to the top

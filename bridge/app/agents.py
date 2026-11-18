@@ -3,7 +3,7 @@
 import re
 
 SYSTEM_PREFIXES = ("Agent Hub: ",)
-SYSTEM_NAMES = frozenset({"The Bridge: API", "Phone Reply Agent"})
+SYSTEM_NAMES = frozenset({"The Bridge: API", "Phone Reply Agent", "Engineer: notify", "Engineer: dispatch"})
 STOP_WORDS = frozenset({"agent", "the", "a"})
 AGENT_ID_RE = re.compile(r"^(n8n|svc|claude):[\w:.-]{1,80}$")
 

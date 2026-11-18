@@ -11,11 +11,12 @@ from aiohttp import web
 
 from . import agents as agents_mod
 from .crew import COMMAND_ACTIONS, CrewError
-from .db import RETRYABLE, THEMES, USER_TEXT_MAX
+from .db import RETRYABLE, THEMES, TICKET_STATUSES, USER_TEXT_MAX
 from .n8n import N8nError
 
-APP_VERSION = "0.1.2"
+APP_VERSION = "0.1.3"
 
+APPROVE_COMMENT = "Approved"
 LIMITS = {"title": 120, "details": 4000, "comment": 4000, "resolution": 2000}
 CLIENT_ID_RE = re.compile(r"^[A-Za-z0-9_-]{8,64}$")
 THREAD_ID_RE = re.compile(r"^th_[0-9a-f]{32}$")
@@ -203,7 +204,8 @@ async def unread(db, user):
         if (lib.get("fetchedAt") or 0) > since:
             lib_unread = sum(1 for f in lib["findings"] if not f["applied"])
     return {"threads": sum(t["unread"] for t in threads), "inbox": await db.a("inbox_unread", user.id),
-            "tickets": len(tickets), "library": lib_unread}
+            "tickets": len(tickets), "library": lib_unread,
+            "ticketsNeedYou": len(await db.a("tickets_needing_you"))}
 
 
 async def user_settings(db, user):
@@ -245,6 +247,7 @@ async def get_overview(request):
             "problems": status.get("problems") or [],
             "agents": [a for a in agents if a.get("state") in ("error", "down")],
             "tickets": await db.a("tickets_with_new_agent_comment", user.id),
+            "ticketsNeedYou": await db.a("tickets_needing_you"),
             "findings": sum(1 for f in (lib or {}).get("findings", []) if not f["applied"]),
         },
         "running": {"n8n": status.get("running") or [], "claude": working},
@@ -278,7 +281,7 @@ async def get_messages(request):
 async def get_tickets(request):
     db = ctx(request)[0]
     status = request.query.get("status") or None
-    if status and not WORD_RE.match(status):
+    if status and status not in TICKET_STATUSES:
         raise ApiError(400, "invalid", "status is not valid")
     c = await db.a("cache_get", "n8n.status")
     return web.json_response({"tickets": await db.a("list_tickets", status),
@@ -560,10 +563,20 @@ async def update_ticket(request, body, user):
     except ValueError:
         raise ApiError(404, "not_found", "No such ticket") from None
     status = body.get("status")
-    if status is not None and (not isinstance(status, str) or not WORD_RE.match(status)):
-        raise ApiError(400, "invalid", "status is not valid")
+    if status is not None and status not in TICKET_STATUSES:
+        raise ApiError(400, "invalid", "status must be one of " + ", ".join(TICKET_STATUSES))
     resolution = clean_text(body.get("resolution"), "resolution", LIMITS["resolution"])
     comment = clean_text(body.get("comment"), "comment", LIMITS["comment"])
+    approve = as_bool(body.get("approve", False), "approve")
+    if approve:
+        # Approve = a ticket update with the comment "Approved" (author = the HA user); only a fix awaiting review.
+        # Promotion to live still needs the deploy approved in OpenCode.
+        if status is not None or resolution is not None or comment is not None:
+            raise ApiError(400, "invalid", "approve goes alone")
+        t = next((x for x in await db.a("list_tickets") if x["id"] == tid), None)
+        if t is None or t["status"] != "awaiting_approval":
+            raise ApiError(409, "not_awaiting", "That ticket is not waiting for approval")
+        comment = APPROVE_COMMENT
     agent_id = body.get("agentId")
     if agent_id is not None and (not isinstance(agent_id, str) or not agents_mod.AGENT_ID_RE.match(agent_id)):
         raise ApiError(400, "invalid", "agentId is not a valid agent id")
@@ -573,7 +586,8 @@ async def update_ticket(request, body, user):
     for k, v in (("status", status), ("resolution", resolution), ("comment", comment), ("agent_id", agent_id)):
         if v is not None:
             payload[k] = v
-    summary = ",".join(k for k in ("status", "resolution", "comment", "agent_id") if k in payload)
+    summary = "approve" if approve else ",".join(k for k in ("status", "resolution", "comment", "agent_id")
+                                                 if k in payload)
     return await _ticket_call(request, user, "ticket.update", str(tid), summary, payload, body["clientId"])
 
 

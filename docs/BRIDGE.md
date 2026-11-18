@@ -278,3 +278,14 @@ only when the add-on is ready to test.
   /agent-hub/status, /agent-hub/ticket and all /bridge/* take X-Bridge-Key. Switch order: Isaac pastes the key (add-on
   options + Mr Manager) → the add-on confirms 200s with the key → the NAS agent flips all 4 workflows in one redeploy.
 
+
+**The Engineer in Tickets (0.1.3, from the n8n owner, 2026-11-18):** the Engineer is an OpenCode agent working the ticket
+inbox. Ticket statuses are `open | in_progress | needs_isaac | awaiting_approval | done | closed` (the server accepts only
+these). `needs_isaac` = the Engineer wants direction ("Needs you", caution ▲, comment box ready with "The Engineer is
+waiting for your direction"); `awaiting_approval` = a sandboxed fix is ready ("Ready to review": Approve, lit, and Request
+changes). Approve is `POST api/tickets/{id} {approve: true}` → a ticket update with the comment "Approved" (author = the
+HA user, audited as `ticket.update` / `approve`); promotion to live still needs a click in OpenCode, which the page says.
+Request changes is a plain comment; a human comment wakes the Engineer within 15 min. Comment authors "Engineer" and
+"NAS agent" are agents, anyone else is the human. Both statuses feed Now's needs-you count and panels
+(`needsYou.ticketsNeedYou`, `unread.ticketsNeedYou`), after the Claude prompts; the status control sets only
+Open / In progress / Done. "Engineer: notify" and "Engineer: dispatch" are system workflows.

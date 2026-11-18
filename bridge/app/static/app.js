@@ -89,7 +89,7 @@ function refetchAll(){['state','crew','overview','threads','tickets','tasks','li
   D.runs={};D.output={};const t=S.chat&&S.chat!=='list'&&S.chat!=='new'?S.chat:null;D.msgs={};D.more={};if(t)loadMsgs(t);}
 
 /* ---------- normalised views of the data ---------- */
-const SYS_NAMES=['The Bridge: API','Phone Reply Agent'];
+const SYS_NAMES=['The Bridge: API','Phone Reply Agent','Engineer: notify','Engineer: dispatch'];
 const isSys=a=>a.group==='system'||/^Agent Hub: /.test(a.name||'')||SYS_NAMES.includes(a.name);
 const short=n=>str(n).replace(/\s*\([^)]*\)\s*$/,'').replace(/ voice assistant$/,'');
 function n8nOf(){const c=D.crew||{};return c.n8n||c.status||{};}
@@ -120,7 +120,18 @@ const pipOf=c=>c==='off'?'':c;
 const isDesk=()=>frame.clientWidth>=960;
 function modelName(m){const x=/claude-([a-z]+)-(\d+)(?:-(\d+))?/.exec(m||'');return x?x[1][0].toUpperCase()+x[1].slice(1)+' '+x[2]+(x[3]?'.'+x[3]:''):(m||'');}
 function tok(n){n=+n||0;return n>=1e6?(n/1e6).toFixed(1)+'M':n>=1000?Math.round(n/1000)+'k':String(n);}
-function tStatus(t){const s=str(t.status).toLowerCase();return s==='closed'||s==='done'||s==='resolved'?'done':s==='in_progress'||s==='in progress'||s==='progress'?'progress':'open';}
+/* ticket status -> group (open | needs | progress | done); the Engineer (OpenCode, on the ticket inbox) sets needs_isaac
+   when it wants direction and awaiting_approval when a sandboxed fix is ready for review */
+function tStatus(t){const s=str(t.status).toLowerCase();return s==='closed'||s==='done'||s==='resolved'?'done':s==='needs_isaac'||s==='awaiting_approval'?'needs':s==='in_progress'||s==='in progress'||s==='progress'?'progress':'open';}
+const tWord=t=>{const s=str(t.status).toLowerCase();return s==='needs_isaac'?'Needs you':s==='awaiting_approval'?'Ready to review':{done:'Done',progress:'In progress',open:'Open'}[tStatus(t)];};
+const tPip=st=>st==='done'?'done':st==='progress'?'busy':st==='needs'?'caut':'';
+const AGENT_AUTHORS=['NAS agent','Engineer'];   // any other author is the human (HA user name)
+const isAgentC=c=>AGENT_AUTHORS.includes(c.author)||c.role==='agent'||c.agent===true;
+/* tickets handed back to you, oldest first: from the tickets list when loaded, else Now's overview */
+function tNeeds(){if(D.tickets)return D.tickets.filter(t=>tStatus(t)==='needs').sort((a,b)=>tm(a.updatedAt)-tm(b.updatedAt));
+  const o=D.overview&&D.overview.needsYou;return o&&Array.isArray(o.ticketsNeedYou)?o.ticketsNeedYou:null;}
+function tNeedN(){const l=tNeeds();return l?l.length:+(((D.state&&D.state.unread)||{}).ticketsNeedYou)||0;}
+const lastAgentC=t=>t.last!==undefined?t.last:comments(t).slice().reverse().find(isAgentC)||null;
 const TYPE={bug:'Bug',feature:'Feature',tool_feedback:'Tool feedback','tool feedback':'Tool feedback',question:'Question',test:'Test'};
 const agentOfTicket=t=>{const id=t.agentId||t.agent_id||t.agentMatch||t.agent_match;if(id){const x=AGENTS.find(a=>a.id===id);if(x)return x;}if(!t.agent)return null;return AGENTS.find(a=>a.name===t.agent)||null;};
 function comments(t){const c=t.comments;if(!c)return[];if(Array.isArray(c))return c;try{const x=JSON.parse(c);return Array.isArray(x)?x:[];}catch(e){return[];}}
@@ -200,7 +211,7 @@ function sseOpen(){
     sched('n8n');});
   on('thread',d=>{const t=d.thread||d;if(!t||!t.id)return;if(D.threads){const i=D.threads.findIndex(x=>x.id===t.id);if(t.archived){if(i>=0)D.threads.splice(i,1);}else if(i>=0)D.threads[i]=Object.assign({},D.threads[i],t);else D.threads.unshift(t);}sched('chat');});
   on('message',d=>{const m=d.message||d;if(!m||m.id==null)return;upsertMsg(m);sched('chat');});
-  on('tickets',()=>{if(D.tickets||ERR.tickets)load('tickets',true);if(D.state)load('state',true);});
+  on('tickets',()=>{if(D.tickets||ERR.tickets)load('tickets',true);if(D.state)load('state',true);if(D.overview)load('overview',true);});
   on('inbox',d=>{if(D.inbox||ERR.inbox)load('inbox',true);if(D.state&&D.state.unread&&d.count!=null)D.state.unread.inbox=d.count;sched('inbox');});
   on('library',d=>{if(D.library){const ap_=new Set(arr(d.applied));if(d.date&&D.library.date&&d.date!==D.library.date){load('library',true);return;}FINDS().forEach(f=>{if(ap_.has(f.id)&&!f.applied){f.applied=true;f.at=now();}});}sched('library');});
   on('job',d=>{if(!d.id)return;D.jobs[d.id]=Object.assign({},D.jobs[d.id],d);if(d.kind==='library.apply'||/library/.test(str(d.kind)))jobChanged(d);sched('library');});
@@ -229,7 +240,7 @@ function parseRoute(){const p=location.hash.replace(/^#\/?/,'').split('/').map(x
   if(v==='crew'){S.view='crew';S.crew=p[1]==='agents'?'agents':'claude';return;}
   if(v==='chat'){S.view='chat';S.chat=p[1]==='list'?'list':p[1]||null;return;}
   if(v==='ticket'&&p[1]){S.view='tickets';S.ticket=isNaN(+p[1])?p[1]:+p[1];return;}
-  if(v==='tickets'){S.view='tickets';if(p[1]==='new')S.newT=true;else if(['open','progress','done'].includes(p[1]))S.tf=p[1];return;}
+  if(v==='tickets'){S.view='tickets';if(p[1]==='new')S.newT=true;else if(['open','needs','progress','done'].includes(p[1]))S.tf=p[1];return;}
   if(['now','tasks','library','inbox','more','settings'].includes(v))S.view=v;}
 function go(view,o){S.view=view;Object.assign(S,{agent:null,run:null,ticket:null,newT:false,inbox:null},o||{});
   if(view==='chat'&&!(o&&'chat' in o))S.chat=isDesk()?(S.chat&&S.chat!=='list'?S.chat:null):'list';
@@ -237,7 +248,7 @@ function go(view,o){S.view=view;Object.assign(S,{agent:null,run:null,ticket:null
   const r='#'+route();if(location.hash!==r)history.pushState(null,'',r);render(true);window.scrollTo(0,0);}
 window.addEventListener('popstate',()=>{parseRoute();render(true);});
 function threadUnread(){return arr(D.threads).reduce((a,t)=>a+(+t.unread||0),0);}
-function counts(){const un=(D.state&&D.state.unread)||{};const n=needs().length+alertN();
+function counts(){const un=(D.state&&D.state.unread)||{};const n=needs().length+alertN()+tNeedN();
   const u=D.threads?threadUnread():(+un.chat||+un.threads||0);
   const o=D.tickets?D.tickets.filter(t=>tStatus(t)!=='done').length:(+un.tickets||0);
   const l=D.library?FINDS().filter(f=>!f.applied).length:(+un.library||0);return{now:n,chat:u,tickets:o,library:l,inbox:+un.inbox||0};}
@@ -442,14 +453,14 @@ function copyText(t){if(navigator.clipboard&&window.isSecureContext)return navig
 const V={};
 V.now=function(m){
   const crew=need(m,'crew','the crew',4);if(!crew)return;use('overview');
-  const n=needs(),al=alertAgents(),ma=machAlerts(),wk=working(),desk=isDesk(),N=n8nOf(),O=D.overview||{};
+  const n=needs(),al=alertAgents(),ma=machAlerts(),wk=working(),desk=isDesk(),N=n8nOf(),O=D.overview||{},tk=tNeeds()||[],nn=n.length+tk.length;
   const top=gap(h('div','stack'),'8px');
-  const hero=al.length?al[0].name+' failed.':ma.length?str(ma[0].M.machine.name||ma[0].M.key).replace(/^./,c=>c.toUpperCase())+' missed '+ma[0].n+' runs.':n.length===1?n[0].name+' needs you.':n.length?n.length+' need you.':wk.length?'All fine.':'All quiet.';
+  const hero=al.length?al[0].name+' failed.':ma.length?str(ma[0].M.machine.name||ma[0].M.key).replace(/^./,c=>c.toUpperCase())+' missed '+ma[0].n+' runs.':nn===1?(n.length?n[0].name:'Ticket #'+tk[0].id)+' needs you.':nn?nn+' need you.':wk.length?'All fine.':'All quiet.';
   const mainA=AGENTS.filter(a=>!isSys(a)),onN=mainA.filter(a=>aState(a).c==='run').length,offN=mainA.filter(a=>aState(a).c==='off').length;
-  const lead=[(al.length||ma.length)&&n.length?n.length+' need you':null,wk.length?wk.length+' running':'Nothing running',onN+' agents on'+(offN?', '+offN+' off':'')].filter(Boolean).join(' · ');
+  const lead=[(al.length||ma.length)&&nn?nn+' need you':null,wk.length?wk.length+' running':'Nothing running',onN+' agents on'+(offN?', '+offN+' off':'')].filter(Boolean).join(' · ');
   ap(top,h('h1','hero',hero),h('p','lead',lead));
   const banners=[...al.map(a=>failBanner(a,false)),...ma.map(missBanner)];
-  const needBox=n.length?ap(h('div','stack'),...n.map(s=>{const p=h('section','panel need');p.append(ap(h('div','row sb'),plate('Needs you'),h('span','num dim','Since '+hm(tm(s.waiting.since)))),h('h2','vt',s.name),askBlock(s));return p;})):null;
+  const needBox=nn?ap(h('div','stack'),...n.map(s=>{const p=h('section','panel need');p.append(ap(h('div','row sb'),plate('Needs you'),h('span','num dim','Since '+hm(tm(s.waiting.since)))),h('h2','vt',s.name),askBlock(s));return p;}),...tk.map(ticketNeed)):null;   // tickets after the Claude prompts
   const bd=h('div','board');bd.setAttribute('aria-label','Status board');
   const cell=(name,c,word,fn)=>{const b=h('button','ann '+c);b.type='button';ap(b,h('b',null,name),h('i',null,word));b.addEventListener('click',fn);bd.append(b);};
   SESS.filter(s=>s.status==='working'||s.status==='waiting').forEach(s=>cell(str(s.name).split(':')[0],openAsk(s)?'caut':'busy',openAsk(s)?'Needs you':'Working',()=>go('crew',{crew:'claude'})));
@@ -633,20 +644,22 @@ V.chat=function(m){
 /* ---------- tickets (n8n, cached by the server; limits: title 120, details 4000, comment 4000) ---------- */
 function ticketLi(t){const st=tStatus(t),b=h('button','li');b.type='button';b.addEventListener('click',()=>go('tickets',{ticket:t.id}));
   const a=agentOfTicket(t),when=st==='done'?'Done '+hm(tm(t.updatedAt)):'Filed '+ago(tm(t.createdAt||t.created));
-  ap(b,pip(st==='done'?'done':st==='progress'?'busy':''),h('span','t',t.title||'(no title)'),h('span','m',when),h('span','go'),h('span','s',[TYPE[t.type]||t.type||'Ticket',a?short(a.name):(t.agent||'No agent'),st==='done'?'Done':st==='progress'?'In progress':'Open'].join(' · ')));
+  const meta=[TYPE[t.type]||t.type||'Ticket',a?short(a.name):(t.agent||'No agent')].join(' · '),sl=h('span','s');   // alert first: the caution word leads
+  if(st==='needs')ap(sl,h('span','cw',tWord(t)),' · '+meta);else sl.textContent=meta+' · '+tWord(t);
+  ap(b,pip(tPip(st)),h('span','t',t.title||'(no title)'),h('span','m',when),h('span','go'),sl);
   if(S.ticket===t.id)b.setAttribute('aria-current','true');return b;}
 const newDraft=a=>{S.draft={type:'bug',agent:a||'',title:'',details:''};S.bad=false;};
 V.tickets=function(m){
   if(S.newT)return newTicket(m);
   const TK=need(m,'tickets','tickets',3);if(!TK)return;use('crew');
   if(S.ticket!=null)return ticketDetail(m,TK);
-  const by={open:[],progress:[],done:[]};TK.forEach(t=>by[tStatus(t)].push(t));
+  const by={open:[],needs:[],progress:[],done:[]};TK.forEach(t=>by[tStatus(t)].push(t));
   m.append(ap(h('div','row sb'),h('h1','hero','Tickets'),key('New ticket','',()=>{newDraft();go('tickets',{newT:true});})));
-  const seg=h('div','segc full');seg.setAttribute('role','group');seg.setAttribute('aria-label','Filter');
-  [['open','Open'],['progress','In progress'],['done','Done']].forEach(([v,l])=>{const b=h('button',null);b.type='button';ap(b,l,h('span','n',by[v].length));b.setAttribute('aria-pressed',S.tf===v);b.addEventListener('click',()=>{S.tf=v;history.replaceState(null,'','#'+route());render();});seg.append(b);});
+  const seg=h('div','segc full wrap4');seg.setAttribute('role','group');seg.setAttribute('aria-label','Filter');
+  [['open','Open'],['needs','Needs you'],['progress','In progress'],['done','Done']].forEach(([v,l])=>{const b=h('button',null);b.type='button';ap(b,l,h('span','n',by[v].length));b.setAttribute('aria-pressed',S.tf===v);b.addEventListener('click',()=>{S.tf=v;history.replaceState(null,'','#'+route());render();});seg.append(b);});
   m.append(seg);const list=by[S.tf].slice().sort((a,b)=>tm(b.updatedAt)-tm(a.updatedAt));
   if(list.length){m.append(ap(h('div','list'),...list.map(ticketLi)));return;}
-  const e=h('div','empty');ap(e,h('p','h',S.tf==='open'?'Nothing open.':S.tf==='progress'?'Nothing in progress.':'Nothing done yet.'),h('p',null,'Tickets you file here, from Home Assistant or by asking Agent Hub land in this list. The agents reply in the comments.'));
+  const e=h('div','empty');ap(e,h('p','h',S.tf==='open'?'Nothing open.':S.tf==='needs'?'Nothing needs you.':S.tf==='progress'?'Nothing in progress.':'Nothing done yet.'),h('p',null,'Tickets you file here, from Home Assistant or by asking Agent Hub land in this list. The agents reply in the comments.'));
   if(S.tf==='open'){m.querySelector('.row.sb').lastChild.remove();e.append(key('New ticket','lit',()=>{newDraft();go('tickets',{newT:true});}));}
   m.append(e);
   if(S.tf!=='done'&&by.done.length){const b=gap(h('div','stack'),'0');b.append(grouphd('Recently done'),ap(h('div','list'),...by.done.slice().sort((a,b)=>tm(b.updatedAt)-tm(a.updatedAt)).slice(0,3).map(ticketLi)));m.append(b);}
@@ -660,19 +673,44 @@ function ticketDetail(m,TK){
   const pn=ap(h('div','panel'),kv);if(t.details)pn.append(gap(ap(h('div','stack'),plate('Details'),h('p','md',t.details)),'4px'));if(t.resolution)pn.append(gap(ap(h('div','stack'),plate('Resolution'),h('p','md',t.resolution)),'4px'));
   m.append(pn);
   const seg=h('div','segc full');seg.setAttribute('role','group');seg.setAttribute('aria-label','Status');
+  /* the Engineer owns needs_isaac / awaiting_approval: the control only sets Open / In progress / Done */
   [['open','Open','open'],['progress','In progress','in_progress'],['done','Done','closed']].forEach(([v,l,api])=>{const b=h('button',null,l);b.type='button';b.setAttribute('aria-pressed',st===v);
     b.addEventListener('click',()=>{if(st===v)return;const old=t.status;t.status=api;render();post(API.ticket(t.id),{status:api}).then(j=>{if(j&&(j.ticket||j.id))Object.assign(t,j.ticket||j);toast('Status · '+l);render();},e=>{t.status=old;failToast('Status not changed',e);render();});});seg.append(b);});
-  m.append(gap(ap(h('div','stack'),grouphd('Status'),seg),'0'));
+  const sw=st==='needs'?ap(h('div','row sb'),grouphd('Status'),tag('caut','▲ '+tWord(t),'caut-t')):grouphd('Status');
+  m.append(gap(ap(h('div','stack'),sw,seg),'0'));
   const cs=comments(t),cv=h('div','convo');cv.style.padding='4px 0 0';
   if(!cs.length)cv.append(h('p','dim','No comments yet.'));
-  cs.forEach(c=>{const at=hm(tm(c.at||c.createdAt||c.date));if(c.author==='NAS agent'||c.role==='agent'||c.agent===true){cv.append(ap(h('div','a'),ap(h('span','who',c.author||'Agent'),h('span','num',at)),h('p','md',c.text)));}
+  cs.forEach(c=>{const at=hm(tm(c.at||c.createdAt||c.date));if(isAgentC(c)){cv.append(ap(h('div','a'),ap(h('span','who',c.author||'Agent'),h('span','num',at)),h('p','md',c.text)));}
     else{cv.append(h('div','u',c.text));const by_=h('span','num dim',(c.author||user().display||'You')+' · '+at);by_.style.cssText='justify-self:end;font-size:13px;margin-top:-12px';cv.append(by_);}});
-  const dk='tc:'+t.id,ta=h('textarea','inp');ta.rows=3;ta.maxLength=4000;ta.placeholder='Add a comment for the agent';ta.setAttribute('aria-label','Comment');bindDraft(ta,dk);
-  const add=key('Add comment','lit',()=>{const v=str(S.drafts[dk]).trim();if(!v){ta.focus();return;}add.disabled=true;
-    post(API.ticket(t.id),{comment:v}).then(j=>{delete S.drafts[dk];if(j&&(j.ticket||j.id))Object.assign(t,j.ticket||j);else{const c=comments(t);c.push({at:new Date().toISOString(),author:user().display||user().name,text:v});t.comments=c;}toast('Comment added · #'+t.id);render();},
-      e=>{add.disabled=false;failToast('Comment not added',e);});});
-  m.append(gap(ap(h('div','stack'),grouphd('Comments'),cv,ta,ap(h('div','keys'),add)),'10px'));
+  const s_=str(t.status).toLowerCase(),review=s_==='awaiting_approval',waiting=s_==='needs_isaac';
+  S.approved=S.approved||{};S.changes=S.changes||{};if(!review){delete S.approved[t.id];delete S.changes[t.id];}
+  else{const lc=cs[cs.length-1];if(lc&&!isAgentC(lc)&&str(lc.text).trim()==='Approved')S.approved[t.id]=true;}   // approved earlier: n8n hasn't moved it yet
+  const pushC=v=>{const c=comments(t);c.push({at:new Date().toISOString(),author:user().display||user().name,text:v});t.comments=c;};
+  const dk='tc:'+t.id,ta=h('textarea','inp');ta.rows=3;ta.maxLength=4000;ta.placeholder=review?'What should change?':waiting?'Your direction for the Engineer':'Add a comment for the agent';ta.setAttribute('aria-label','Comment');bindDraft(ta,dk);
+  const asks=review&&!S.changes[t.id];   // Approve is the one action; Request changes opens the comment box
+  const add=key(review?'Send':'Add comment',asks||S.approved[t.id]?'':'lit',()=>{const v=str(S.drafts[dk]).trim();if(!v){ta.focus();return;}add.disabled=true;
+    post(API.ticket(t.id),{comment:v}).then(j=>{delete S.drafts[dk];delete S.changes[t.id];if(j&&(j.ticket||j.id))Object.assign(t,j.ticket||j);else pushC(v);toast((review?'Changes requested':'Comment added')+' · #'+t.id);render();},
+      e=>{add.disabled=false;failToast(review?'Not sent':'Comment not added',e);});});
+  const box=gap(ap(h('div','stack'),grouphd('Comments'),cv),'10px');
+  if(review){
+    if(S.approved[t.id])box.append(banner('info','■','Approved','Final step: approve the deploy in OpenCode.'));
+    else if(asks){let busy=false;const ap_=key('Approve','lit',()=>{if(busy)return;busy=true;ap_.disabled=true;
+        post(API.ticket(t.id),{approve:true}).then(()=>{S.approved[t.id]=true;pushC('Approved');toast('Approved · #'+t.id);render();},e=>{busy=false;ap_.disabled=false;failToast('Not approved',e);});});
+      box.append(ap(h('div','keys'),ap_,key('Request changes','',()=>{S.changes[t.id]=true;render();setTimeout(()=>{const x=main.querySelector('[data-k="'+dk+'"]');if(x)x.focus();});})));}
+    else ap(box,ta,ap(h('div','keys'),add,lnk('Cancel',()=>{delete S.changes[t.id];render();})));}
+  else{if(waiting)box.append(plate('The Engineer is waiting for your direction','caut-t'));ap(box,ta,ap(h('div','keys'),add));}
+  m.append(box);
+  /* needs_isaac: the box is ready to type in, once per visit (not on live re-renders) */
+  if(waiting&&S.focusT!==t.id){S.focusT=t.id;setTimeout(()=>{const x=main.querySelector('[data-k="'+dk+'"]');if(x&&document.activeElement!==x)x.focus({preventScroll:true});});}
+  if(!waiting&&S.focusT===t.id)S.focusT=null;
 }
+/* Now: a ticket the Engineer handed back (title, agent, the last Engineer comment, Open ticket) */
+function ticketNeed(t){const p=h('section','panel need'),a=agentOfTicket(t),lc=lastAgentC(t),since=tm(t.since||t.updatedAt);
+  const tx=lc?str(lc.text).replace(/\s+/g,' ').trim():'';
+  p.append(ap(h('div','row sb'),plate('Needs you'),h('span','num dim',since?'Since '+hm(since):'')),h('h2','vt',t.title||'(no title)'),
+    h('p','dim',['#'+t.id,a?short(a.name):(t.agent||'No agent'),tWord(t)].join(' · ')));
+  if(tx)p.append(ap(h('div','well'),h('span','plate',(lc.author||'Engineer')+' · '+hm(tm(lc.at))),h('p',null,tx.length>160?tx.slice(0,157).trimEnd()+'…':tx)));
+  p.append(ap(h('div','keys'),key('Open ticket','',()=>go('tickets',{ticket:t.id}))));return p;}
 function newTicket(m){
   use('crew');const d=S.draft;m.append(crumb('Tickets',()=>go('tickets'),'New ticket'),h('h1','vt','New ticket'));
   const f=h('form','panel');f.noValidate=true;f.style.gap='16px';
