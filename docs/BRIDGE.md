@@ -214,8 +214,8 @@ replies, a replayed summary after long gaps? Each view's layout is a separate Ja
 
 **NAS agent:** 1. Answered 2026-11-18: the cadences are fine; successful executions of "Agent Hub: Status" and "The Bridge: API"
 are no longer saved; no push (the add-on stays inbound-free). 2. Is there a maximum chat `query` length? Can `agent` take the id (a rename
-would orphan threads)? 3. Can `bridge/inbox` take `?after=<id>`? 4. Which source IP does the allow-list see from the HA host (we
-expect <ha-host-ip>, never 172.30.32.0/23)?
+would orphan threads)? 3. Can `bridge/inbox` take `?after=<id>`? 4. Source IP: verified 2026-11-18 (Mr Manager curl from the Terminal & SSH add-on, 172.30.33.1 → 200): add-on traffic
+NATs out as <ha-host-ip>, so no allow-list change and no secrets are needed.
 
 **Mr Manager:** is the installed Supervisor ≥ 2026.11.0 (server-side `panel_admin`, Groups header)? Then add the repository
 https://github.com/Starkkaman/JamBoard to the app store.
