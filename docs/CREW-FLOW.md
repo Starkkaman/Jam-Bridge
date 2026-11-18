@@ -9,7 +9,7 @@ Isaac asked for "our own Claude Code plugin that makes it easier to track progre
 - savvy-flow is a third-party plugin (claude-kit). Our local edits (no Fable tier) are lost on every update.
 
 ## Proposal
-A second plugin, `crew-flow`, in the JamBoard marketplace, next to `crew-hub`:
+A second plugin, `crew-flow`, in this repo's marketplace ("jamboard"), next to `crew-hub`:
 - An orchestrator skill `/crew-flow <task>`, modelled on savvy-flow: plan, delegate to tiered workers, adversarial review.
   Tiers Heavy / Careful / Medium / Light as agents. No Fable.
 - **Tracking through actions the model takes anyway**, read by crew-hub hooks at zero extra cost:

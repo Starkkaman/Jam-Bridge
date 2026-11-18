@@ -35,7 +35,7 @@ crew_hub (the HACS integration) keeps MQTT/webhook transport, HMAC signing and t
 
 ## 3. Repo layout and packaging
 ```
-repository.yaml   name "JamBoard", url https://github.com/Starkkaman/JamBoard, maintainer "Isaac" (HACS ignores it)
+repository.yaml   name "The Bridge", url https://github.com/Starkkaman/Jam-Bridge, maintainer "Isaac" (HACS ignores it)
 bridge/           config.yaml Dockerfile run.sh (LF) CHANGELOG.md DOCS.md icon.png logo.png translations/en.yaml
   app/            server.py api.py crew.py n8n.py jobs.py db.py backup.py  static/ (index.html app.css app.js favicon.svg fonts/)
 tests/bridge/     test_*.py fake_n8n.py fake_core_ws.py ingress_proxy.py  fixtures/n8n/ (moved here from bridge/fixtures/)
@@ -230,7 +230,7 @@ would orphan threads)? 3. Can `bridge/inbox` take `?after=<id>`? 4. Source IP: v
 NATs out as the HA host's LAN address, so no allow-list change and no secrets are needed.
 
 **Mr Manager:** is the installed Supervisor ≥ 2026.11.0 (server-side `panel_admin`, Groups header)? Then add the repository
-https://github.com/Starkkaman/JamBoard to the app store.
+https://github.com/Starkkaman/Jam-Bridge to the app store.
 
 **NAS agent answers (2026-11-18, round 2):**
 - Tickets carry `agent_id` (POST /agent-hub/ticket accepts it; must match `^(n8n|svc|claude):[\w:.-]{1,80}$`, else stored

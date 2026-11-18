@@ -204,7 +204,7 @@ def test_no_stray_app_config_files():
 
 def test_repository_yaml():
     repo = yaml.safe_load((ROOT / "repository.yaml").read_text())
-    assert repo == {"name": "The Bridge", "url": "https://github.com/Starkkaman/JamBoard", "maintainer": "Starkkaman"}
+    assert repo == {"name": "The Bridge", "url": "https://github.com/Starkkaman/Jam-Bridge", "maintainer": "Starkkaman"}
 
 
 def test_run_sh_and_dockerfile():

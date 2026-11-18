@@ -5,9 +5,9 @@
   "codeowners": ["@Starkkaman"],
   "config_flow": true,
   "dependencies": ["mqtt", "webhook"],
-  "documentation": "https://github.com/Starkkaman/JamBoard",
+  "documentation": "https://github.com/Starkkaman/Jam-Bridge",
   "iot_class": "local_push",
-  "issue_tracker": "https://github.com/Starkkaman/JamBoard/issues",
+  "issue_tracker": "https://github.com/Starkkaman/Jam-Bridge/issues",
   "single_config_entry": true,
   "version": "0.6.0"
 }

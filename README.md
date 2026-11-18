@@ -1,5 +1,9 @@
 # Crew Hub
 
+
+> The repo was renamed from JamBoard to Jam-Bridge on 2026-11-18. The plugin marketplace keeps its id `jamboard`, so
+> installed plugins (`crew-hub@jamboard`, `crew-flow@jamboard`) keep working. Old GitHub URLs redirect.
+
 Live progress of every Claude Code session and agent, shown in Home Assistant. Each machine runs the `crew-hub`
 Claude Code plugin (hooks + `crew-hubd`), which publishes a snapshot over MQTT. The `crew_hub` integration mirrors
 those snapshots in memory and pushes them to the `custom:crew-hub-card` Lovelace card over Home Assistant's own
@@ -11,7 +15,7 @@ Needs Home Assistant with the MQTT integration set up, on the same broker the ma
 Tested with Home Assistant 2026.10.4.
 
 1. Install the integration, either way:
-   - **HACS:** HACS → Integrations → ⋮ → Custom repositories → add `https://github.com/Starkkaman/JamBoard`,
+   - **HACS:** HACS → Integrations → ⋮ → Custom repositories → add `https://github.com/Starkkaman/Jam-Bridge`,
      category *Integration*, then install **Crew Hub**.
    - **Manual:** copy `custom_components/crew_hub` into `/config/custom_components/crew_hub`.
 2. Restart Home Assistant.
@@ -300,7 +304,7 @@ side is unchanged.
    `python3` 3.9+ that Git Bash finds. Check in Git Bash: `python3 --version`. The Microsoft Store Python provides
    `python3`; the python.org installer only installs `python` and `py`, so with it add a `python3` (for example the
    Store one) or the hooks won't run. Nothing to pip install.
-2. **Install:** `claude plugin marketplace add Starkkaman/JamBoard`, then `claude plugin install crew-hub@jamboard`.
+2. **Install:** `claude plugin marketplace add Starkkaman/Jam-Bridge`, then `claude plugin install crew-hub@jamboard`.
    Start a new session.
 3. **Pair:** run `/crew-hub-setup` in Claude Code. It tells you to run the pairing tool **yourself** in a terminal
    (PowerShell or Git Bash), with the plugin's absolute path, e.g.

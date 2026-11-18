@@ -255,7 +255,7 @@ so it would need rules for every existing MQTT client and the HA login too. HMAC
 ## Decisions (2026-10-26)
 
 1. Socket injection: approved by Isaac and verified (docs/evidence/bridge-tests.md).
-2. Hosting: GitHub Starkkaman/JamBoard (HACS custom repository).
+2. Hosting: GitHub Starkkaman/Jam-Bridge (renamed from JamBoard 2026-11-18; HACS custom repository).
 3. The MacBook roams: Tailscale app + broker ACLs (batch B) come before it gets a login.
 4. HA batch A: approved and applied 2026-10-26 (HACS install, restart, integration, "Crew" dashboard). Machines + command
    secrets come with step 5.
