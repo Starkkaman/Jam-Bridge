@@ -172,7 +172,7 @@ def test_config_yaml():
     assert cfg["version"] == api.APP_VERSION
     assert cfg["name"] == "The Bridge" and cfg["slug"] == "the_bridge"
     assert cfg["ingress"] is True and cfg["ingress_port"] == 8099
-    assert cfg["panel_admin"] is True and cfg["panel_icon"] == "mdi:bridge" and cfg["panel_title"] == "The Bridge"
+    assert cfg["panel_admin"] is True and cfg["panel_icon"] == "mdi:rocket-launch-outline" and cfg["panel_title"] == "The Bridge"
     assert cfg["homeassistant_api"] is True
     assert cfg["backup"] == "hot" and cfg["backup_pre"] == "python3 /app/backup.py"
     assert set(cfg["backup_exclude"]) == {"bridge.db", "bridge.db-wal", "bridge.db-shm"}
