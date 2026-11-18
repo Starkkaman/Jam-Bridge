@@ -238,3 +238,16 @@ https://github.com/Starkkaman/JamBoard to the app store.
 3. Theme setting: Follow HA (default) / Night / Day, stored per HA user in the add-on's settings table.
 4. Chat history kept 90 days (nightly prune of messages older than 90 days; threads with no messages left are removed).
 
+**Agent output + direct chat (n8n side live 2026-11-18; Isaac: "see the output of each agent when selected, and interact
+directly with them if they're set up for that"):**
+- `GET /webhook/bridge/run?id=<executionId>` → `{id, workflowId, status, mode, startedAt, stoppedAt, lastNode, summary (≤4 KB
+  plain text or null), tools[{tool, calls, error}], output (last node JSON as a string, ≤20 KB), error}`; secrets masked by n8n.
+  "Agent Hub: Status" and "The Bridge: API" keep no successful runs → system, Runs hidden.
+- `/status` agents now carry `chat` (bool) and `role` (downloads, library, security, general, system, service). Direct chat =
+  `POST /agent-hub/chat {query, conversation_id, user_name, agent_id}` (or `role`) → `{output}`, 120 s; one conversation_id per
+  thread (memory is per id). chat:true today: Download Daily Summary, Download Watcher, Security Weekly Review, svc:netaudit,
+  svc:media-agent, Phone Reply Agent, Agent Hub Chat.
+- `GET /webhook/bridge/agent-output?id=svc:…` → `{id, updated, text (markdown, ≤20 KB)}` for services; unknown id → 500.
+- Claude side (to design): on-demand session conversation view + two-way thread, encrypted in transit with the machine's
+  command secret, secrets masked, no raw tool outputs, never in snapshots; subagents are reached through their session.
+
