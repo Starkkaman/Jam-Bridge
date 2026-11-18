@@ -79,8 +79,8 @@
    "last_status": "success"
   },
   {
-   "id": "n8n:wfExample0000008",
-   "workflowId": "wfExample0000008",
+   "id": "n8n:wfExample0000006",
+   "workflowId": "wfExample0000006",
    "name": "Download Watcher",
    "kind": "n8n workflow",
    "state": "off",
@@ -93,8 +93,8 @@
    "last_status": null
   },
   {
-   "id": "n8n:wfExample0000006",
-   "workflowId": "wfExample0000006",
+   "id": "n8n:wfExample0000007",
+   "workflowId": "wfExample0000007",
    "name": "Download Daily Summary",
    "kind": "n8n workflow",
    "state": "ok",
@@ -107,8 +107,8 @@
    "last_status": "success"
   },
   {
-   "id": "n8n:wfExample0000007",
-   "workflowId": "wfExample0000007",
+   "id": "n8n:wfExample0000008",
+   "workflowId": "wfExample0000008",
    "name": "Agent Hub: Status",
    "kind": "n8n workflow",
    "state": "ok",

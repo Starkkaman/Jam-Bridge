@@ -111,7 +111,7 @@ applied[]}`, `job {id, kind, state, detail}`, and a `: ping` comment every 20 s 
 `hello` makes the page refetch its view. "Visible" (§7) means at least one SSE stream is open.
 
 ## 7. n8n adapter (`n8n.py`)
-- **Allow-list by construction** (like Callsheet's `ha.py`): only the nine (method, path) pairs of the NAS contract under `n8n_url`.
+- **Allow-list by construction** (like Callsheet's `ha.py`): only the 13 (method, path) pairs of the NAS contract under `n8n_url`.
   No redirects, no secrets, bodies ≤1 MB (status 2 MB). The first response after a start is logged once (HTTP status only) as
   `n8n.firstContact`, which settles verification 4. Timeouts: GETs 15 s, chat **120 s**, ticket POSTs 20 s, apply **900 s**.
   One request in flight per endpoint (shared; a tick is skipped while the previous call is open). Errors: agent-hub/status retries
@@ -142,6 +142,18 @@ applied[]}`, `job {id, kind, state, detail}`, and a `: ping` comment every 20 s 
   re-reads the `applied` flags every 15 s. The 17:00–01:00 quiet hours are shown up front. `{ok:false, error:"evening quiet
   hours…"}` is shown as is, and only then does "Apply anyway" (`force: true`) appear, behind a **second** confirm.
 - **Inbox:** agent digests and alerts only. Show the title and a two-line clip; tap for the full text (it can name hosts: admin-only panel).
+- **Try again and library scan (added 2026-11-18, from the NAS agent):** `agent-hub/status` agents carry `rerun` (bool) and
+  optionally `rerun_via` (`svc:media-agent` → `bridge/library/scan`). Two POSTs join the allow-list:
+  `bridge/run-now {workflowId, by}` → `{ok, workflowId, name, startedAt, note}` (runs in the background; HTTP 500 = not
+  re-runnable → job error `not_rerunnable`) and `bridge/library/scan {hours: 24, by}` → `{started, state, task}` (read-only, any
+  time; 409 → job `refused`, code `scan_running`). The page calls `POST api/agents/rerun {agentId, confirm: true}` (202 + job;
+  only agents with `rerun: true` in the cached status, else 409 `not_rerunnable`; without `confirm` 400 `confirm_required` with
+  the hint as `error`) or `POST api/library/scan {hours?}` (202 + job, no confirm). Agents in `api/crew`/`api/tasks` carry
+  `canRerun` and `rerunHint` (the confirm copy: both re-runnable workflows notify the owner's phone again). After run-now the job
+  polls `bridge/runs?workflowId=` every 10 s (up to 15 min) for the new `integrated` execution and pushes `job` events with
+  `detail.step` (starting → started → running → finished) and `detail.run {id, status, startedAt, stoppedAt}`. Both actions are
+  audited with the HA user (`agent.rerun`, `library.scan`). A real re-run is not proven yet (it notifies the phone): verify the
+  first one together with the owner after install.
 
 ## 8. crew_hub adapter (`crew.py`)
 - One websocket to `ws://supervisor/core/websocket`, auth with `SUPERVISOR_TOKEN` (read from the environment on each connect;
@@ -236,6 +248,10 @@ https://github.com/Starkkaman/JamBoard to the app store.
    crew-hook keeps its schedule fields (no prompt text), crew-hubd publishes `session.crons[{id, schedule, nextRunAt}]`, and the
    Bridge alerts when a machine is offline past a cron's nextRunAt. Field shape to verify on the current CLI before building.
 3. Theme setting: Follow HA (default) / Night / Day, stored per HA user in the add-on's settings table.
+   How Follow HA works (frontend, 2026-11-18): ingress serves the page in an iframe on HA's own origin, so the page reads
+   `parent.document.querySelector('home-assistant').hass.themes.darkMode` (in a try/catch, re-read every 2 s) and uses
+   `prefers-color-scheme` only when that throws or is missing. Verified against a same-origin fake HA parent (HA light → Day,
+   HA dark → Night, while the device preferred dark); to confirm once on the real HA. Settings says which source is in use.
 4. Chat history kept 90 days (nightly prune of messages older than 90 days; threads with no messages left are removed).
 
 **Agent output + direct chat (n8n side live 2026-11-18; Isaac: "see the output of each agent when selected, and interact

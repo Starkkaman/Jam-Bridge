@@ -1,0 +1,5 @@
+# Test venv for tests/bridge (see bridge/DEV.md). aiohttp matches bridge/Dockerfile.
+aiohttp==3.14.5
+pytest==9.2.0
+pytest-asyncio==1.5.0
+pyyaml==6.0.3

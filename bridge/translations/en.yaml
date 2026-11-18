@@ -1,0 +1,10 @@
+configuration:
+  n8n_url:
+    name: n8n URL
+    description: "Base URL of your n8n instance, e.g. http://<nas-ip>:<n8n-port> (The Bridge adds /webhook/...)."
+  n8n_key:
+    name: n8n key
+    description: "Shared secret sent as the X-Bridge-Key header on every n8n call. Never shown in the page or the logs."
+  log_level:
+    name: Log level
+    description: "How much The Bridge writes to its log."

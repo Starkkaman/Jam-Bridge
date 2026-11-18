@@ -2,3 +2,4 @@
 # launchers and code LF on every OS (shebang lines must not end in \r).
 plugins/** text=auto eol=lf
 plugins/crew-hub/bin/* text eol=lf
+bridge/run.sh text eol=lf

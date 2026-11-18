@@ -1,0 +1,5 @@
+{
+ "id": "svc:media-agent",
+ "updated": "2026-11-18T13:04:01.972667+00:00",
+ "text": "State: idle\nLast report: 2026-11-18 (finished 2026-11-18T13:04:01.972667+00:00)\n\u2022 0 new or replaced titles since Nov 17 23:54\n\u2022 Sonarr missing episodes: 788 (+0)\n\u2022 335 trailers checked (full sweep): 175 poor, better copy found for 128 (152 YouTube searches tonight)\n\u2022 Categories plugin: 3 uncategorised, 46 to review\n\nFindings: 128 (0 fixable, not applied)"
+}

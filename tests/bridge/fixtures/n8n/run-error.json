@@ -1,0 +1,13 @@
+{
+ "id": "178",
+ "workflowId": "wfExample0000004",
+ "status": "error",
+ "mode": "webhook",
+ "startedAt": "2026-11-18T17:03:36.478Z",
+ "stoppedAt": "2026-11-18T17:03:36.533Z",
+ "lastNode": "Hub agent",
+ "summary": "How many trailer fixes are ready and what is the best example?\n\u2192 ",
+ "tools": [],
+ "output": null,
+ "error": "Unbalanced parentheses while parsing $fromAI call: 'agent_id', 'that agent's id from Agent status (e.g. svc:media-agent, n8n:<workflowId>), or empty', 'string', '') }}"
+}

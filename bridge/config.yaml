@@ -1,0 +1,36 @@
+name: "The Bridge"
+version: "0.1.0"
+slug: "the_bridge"
+description: "Crew Hub and the n8n agent crew in one page: chats that stay, tickets, tasks, library fixes and the inbox."
+url: "https://github.com/Starkkaman/JamBoard"
+arch:
+  - amd64
+  - aarch64
+init: false
+startup: application
+# Ingress only (no ports): the Supervisor's proxy (172.30.32.2) is the only peer the server accepts.
+ingress: true
+ingress_port: 8099
+panel_title: "The Bridge"
+panel_icon: "mdi:bridge"
+# Enforced by the Supervisor: a non-admin user gets neither the sidebar entry nor access.
+panel_admin: true
+# SUPERVISOR_TOKEN for ws://supervisor/core/websocket (crew_hub/* only; see app/crew.py's frame allow-list).
+homeassistant_api: true
+# The app holds the only long-term copy of the chats: hot backup of a consistent snapshot (app/backup.py),
+# not the live WAL files.
+backup: hot
+backup_pre: "python3 /app/backup.py"
+backup_exclude:
+  - "bridge.db"
+  - "bridge.db-wal"
+  - "bridge.db-shm"
+# n8n_url is required and has no default (e.g. http://<nas-ip>:<n8n-port>). n8n_key is sent as X-Bridge-Key on every
+# n8n call; it stays in Home Assistant's app options and never reaches the browser, the logs or the database.
+options:
+  n8n_url: null
+  log_level: info
+schema:
+  n8n_url: url
+  n8n_key: "password?"
+  log_level: "list(debug|info|warning|error)"

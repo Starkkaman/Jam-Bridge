@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>The Bridge</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="referrer" content="no-referrer">
+<meta name="color-scheme" content="dark light">
+<meta name="bridge-version" content="{{version}}">
+<!-- Every URL here is relative: Home Assistant ingress serves the app under /api/hassio_ingress/<token>/.
+     The server fills in the version (a new asset URL after every update). Nothing is loaded from outside. -->
+<link rel="stylesheet" href="app.css?v={{version}}">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+</head>
+<body>
+<div class="frame" id="frame">
+  <div class="mc" id="root" data-scheme="night">
+    <header class="band" id="band"></header>
+    <div class="shell">
+      <nav class="rail" id="rail" aria-label="Sections"></nav>
+      <main class="main" id="main"></main>
+    </div>
+    <div class="toastzone" id="toastzone" aria-live="polite"></div>
+    <nav class="tabbar" id="tabbar" aria-label="Sections"></nav>
+    <div id="dlgroot"></div>
+  </div>
+</div>
+<script src="app.js?v={{version}}"></script>
+</body>
+</html>

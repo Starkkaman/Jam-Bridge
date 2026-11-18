@@ -1,0 +1,13 @@
+{
+ "id": "140",
+ "workflowId": "wfExample0000007",
+ "status": "success",
+ "mode": "trigger",
+ "startedAt": "2026-11-18T16:00:45.048Z",
+ "stoppedAt": "2026-11-18T16:00:49.327Z",
+ "lastNode": "Notify phone (Home Assistant)",
+ "summary": "Attention: 1 stuck Radarr download (Example Movie Two) and 14 stuck Sonarr downloads. Radarr and Sonarr have updates available. Radarr has a missing root folder for 3 collections and the Example indexer is down. Sonarr indexers are also down. Prowlarr has no enabled indexers. Readarr has a download client warning.\n\nNew arrivals:\nRadarr: Example Movie (2024), Another Example Film\nSonarr: Example Show S01E02, Sample Series S03E04, Demo Drama S02E07\n\nLibrary issues:\nMissing episodes: 120\nUncategorised: 3\nTo review: 46\n\nReply YES to apply the 4 fixes, or tell me which.",
+ "tools": [],
+ "output": "[]",
+ "error": null
+}

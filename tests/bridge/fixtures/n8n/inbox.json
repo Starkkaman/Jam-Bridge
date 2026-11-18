@@ -21,7 +21,7 @@
   "updatedAt": "2026-11-18T14:00:00.000Z",
   "source": "security",
   "title": "Weekly security review",
-  "message": "Audit status: 2 high, 1 medium. 1. Example container: drop extra rights. 2. Example host: tighten the login method. 3. Example account review is due."
+  "message": "Example: 2 high, 1 medium. 1. A container runs privileged: remove the privileged flag. 2. An example service allows password login: use keys only. 3. An example account has more rights than it needs: reduce them."
  },
  {
   "id": 4,

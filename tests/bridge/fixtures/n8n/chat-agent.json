@@ -1,0 +1,11 @@
+{
+ "request": {
+  "query": "How many trailer fixes are ready and what is the best example?",
+  "conversation_id": "bridge-test-lib3",
+  "user_name": "Alex",
+  "agent_id": "svc:media-agent"
+ },
+ "response": {
+  "output": "There are 128 trailer fixes ready to be applied. A great example is the trailer for The Godfather Part II (1974), which can be upgraded from 360p to 1080p."
+ }
+}
