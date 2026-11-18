@@ -144,7 +144,7 @@ async def test_static_no_traversal_no_redirect(bridge_factory, tmp_path):
     b = await bridge_factory(static_dir=static)
     r = await b.req("GET", "/")
     assert r.status == 200 and f"app.css?v={api.APP_VERSION}" in await r.text()
-    r = await b.req("GET", "/app.css?v=0.1.3")
+    r = await b.req("GET", "/app.css?v=0.1.4")
     assert r.status == 200 and "max-age=604800" in r.headers["Cache-Control"]
     for p in ("/../secret.txt", "/%2e%2e/secret.txt", "/static/../../secret.txt"):
         r = await b.req("GET", p, allow_redirects=False)
@@ -172,7 +172,7 @@ def test_config_yaml():
     assert cfg["version"] == api.APP_VERSION
     assert cfg["name"] == "The Bridge" and cfg["slug"] == "the_bridge"
     assert cfg["ingress"] is True and cfg["ingress_port"] == 8099
-    assert cfg["panel_admin"] is True and cfg["panel_icon"] == "mdi:rocket-launch-outline" and cfg["panel_title"] == "The Bridge"
+    assert cfg["panel_admin"] is True and cfg["panel_icon"] == "bridge:captain-chair" and cfg["panel_title"] == "The Bridge"
     assert cfg["homeassistant_api"] is True
     assert cfg["backup"] == "hot" and cfg["backup_pre"] == "python3 /app/backup.py"
     assert set(cfg["backup_exclude"]) == {"bridge.db", "bridge.db-wal", "bridge.db-shm"}

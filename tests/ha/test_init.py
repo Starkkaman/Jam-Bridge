@@ -15,7 +15,9 @@ from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.helpers import entity_registry as er
 from homeassistant.setup import async_setup_component
 
-from custom_components.crew_hub.const import CARD_URL, DATA_SECRETS, DATA_STORE, DOMAIN, FONTS_URL, VERSION
+from homeassistant.components.frontend import DATA_EXTRA_MODULE_URL, UrlManager
+
+from custom_components.crew_hub.const import CARD_URL, DATA_SECRETS, DATA_STORE, DOMAIN, FONTS_URL, ICONS_URL, VERSION
 
 SECRET = "s3cret-s3cret-s3cret"
 ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -247,11 +249,44 @@ def test_card_has_no_outside_urls() -> None:
     assert not re.findall(r"https?://", src, re.I)
 
 
+# ---- icon set "bridge:" (sidebar panel_icon of The Bridge app) ----
+ICONS_FILE = ROOT / "custom_components" / "crew_hub" / "www" / "bridge-icons.js"
+ICONS_MODULE_URL = f"{ICONS_URL}?v={VERSION}-{hashlib.sha256(ICONS_FILE.read_bytes()).hexdigest()[:12]}"
+
+
+async def test_icons_module_served_and_in_extra_js_url(hass: HomeAssistant, mqtt_mock, hass_client) -> None:
+    """bridge-icons.js is served and listed in the frontend's extra module URLs (every page loads it, sidebar too)."""
+    assert await async_setup_component(hass, "http", {})
+    hass.config.components.add("frontend")  # the real frontend needs hass_frontend; its URL list is all we need
+    hass.data[DATA_EXTRA_MODULE_URL] = UrlManager(lambda *_: None, [])
+    await _setup(hass)
+    assert ICONS_MODULE_URL in hass.data[DATA_EXTRA_MODULE_URL].urls
+    client = await hass_client()
+    resp = await client.get(ICONS_MODULE_URL)
+    assert resp.status == 200
+    assert resp.headers["Content-Type"].split(";")[0] in ("text/javascript", "application/javascript")
+    assert await resp.read() == ICONS_FILE.read_bytes()
+
+
+def test_icons_module_is_tiny_and_registers_the_prefix() -> None:
+    """Loaded on every page: about 1 KB, no outside URLs, registers customIconsets["bridge"] with captain-chair."""
+    src = ICONS_FILE.read_text()
+    assert len(src.encode()) <= 1024
+    assert not re.findall(r"https?://", src, re.I)
+    assert "window.customIconsets" in src and "sets.bridge =" in src and '"captain-chair":' in src
+    assert 'viewBox: "0 0 24 24"' in src
+
+
 # ---- Lovelace resource for the card ----
 CARD_DIGEST = hashlib.sha256((ROOT / "custom_components" / "crew_hub" / "www" / "crew-hub-card.js").read_bytes()).hexdigest()[:12]
 CARD_RESOURCE_URL = f"{CARD_URL}?v={VERSION}-{CARD_DIGEST}"
 STALE_URL = "/crew_hub/crew-hub-card.js?v=0.1.0-07b1ae4aa5b4"
 OTHER = {"id": "other1", "type": "module", "url": "/hacsfiles/mushroom/mushroom.js"}
+
+
+def _card_extra(extra) -> list[str]:
+    """Card URLs passed to the patched add_extra_js_url (the icon set always goes there too)."""
+    return [c.args[1] for c in extra.call_args_list if c.args[1].split("?")[0] == CARD_URL]
 
 
 def _resources(hass: HomeAssistant):
@@ -274,12 +309,13 @@ async def _setup_with_lovelace(hass: HomeAssistant, lovelace_conf: dict | None =
 async def test_storage_mode_creates_resource(hass: HomeAssistant, mqtt_mock, hass_storage) -> None:
     hass_storage["lovelace_resources"] = {"version": 1, "key": "lovelace_resources", "data": {"items": [OTHER]}}
     _, extra = await _setup_with_lovelace(hass)
+    extra.assert_any_call(hass, ICONS_MODULE_URL)  # the icon set is never a Lovelace resource
     items = _card_items(hass)
     assert len(items) == 1
     assert items[0]["url"] == CARD_RESOURCE_URL
     assert items[0]["type"] == "module"
     assert any(i["id"] == "other1" for i in _resources(hass).async_items())
-    extra.assert_not_called()
+    assert _card_extra(extra) == []
 
 
 async def test_storage_mode_updates_stale_in_place_and_drops_duplicates(
@@ -301,7 +337,7 @@ async def test_storage_mode_updates_stale_in_place_and_drops_duplicates(
     items = _card_items(hass)
     assert items == [{"id": "mrmanager1", "type": "module", "url": CARD_RESOURCE_URL}]
     assert [i["id"] for i in _resources(hass).async_items()] == ["mrmanager1", "other1"]
-    extra.assert_not_called()
+    assert _card_extra(extra) == []
 
 
 async def test_storage_mode_current_resource_left_alone(hass: HomeAssistant, mqtt_mock, hass_storage) -> None:
@@ -320,7 +356,7 @@ async def test_storage_mode_current_resource_left_alone(hass: HomeAssistant, mqt
 
 async def test_yaml_mode_falls_back_to_extra_js_url(hass: HomeAssistant, mqtt_mock) -> None:
     _, extra = await _setup_with_lovelace(hass, {"resource_mode": "yaml"})
-    extra.assert_called_once_with(hass, CARD_RESOURCE_URL)
+    assert _card_extra(extra) == [CARD_RESOURCE_URL]
     assert _card_items(hass) == []
 
 
@@ -330,7 +366,7 @@ async def test_resource_error_falls_back_to_extra_js_url(hass: HomeAssistant, mq
         side_effect=RuntimeError("boom"),
     ):
         _, extra = await _setup_with_lovelace(hass)
-    extra.assert_called_once_with(hass, CARD_RESOURCE_URL)
+    assert _card_extra(extra) == [CARD_RESOURCE_URL]
     assert "extra_js_url: boom" in caplog.text
     assert "Traceback" not in caplog.text
 

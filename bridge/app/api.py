@@ -14,7 +14,7 @@ from .crew import COMMAND_ACTIONS, CrewError
 from .db import RETRYABLE, THEMES, TICKET_STATUSES, USER_TEXT_MAX
 from .n8n import N8nError
 
-APP_VERSION = "0.1.3"
+APP_VERSION = "0.1.4"
 
 APPROVE_COMMENT = "Approved"
 LIMITS = {"title": 120, "details": 4000, "comment": 4000, "resolution": 2000}

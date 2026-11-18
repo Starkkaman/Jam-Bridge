@@ -46,6 +46,8 @@ from .const import (
     DATA_WEBHOOK,
     DEFAULT_PREFIX,
     DOMAIN,
+    ICONS_FILENAME,
+    ICONS_URL,
     TRANSPORT_WEBHOOK,
     VERSION,
 )
@@ -60,6 +62,7 @@ PLATFORMS = [Platform.SENSOR, Platform.BINARY_SENSOR]
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 CARD_PATH = Path(__file__).parent / "www" / CARD_FILENAME
 FONTS_PATH = Path(__file__).parent / "www" / "fonts"
+ICONS_PATH = Path(__file__).parent / "www" / ICONS_FILENAME
 
 CrewHubConfigEntry = ConfigEntry[CrewStore]
 
@@ -248,12 +251,19 @@ async def _async_register_frontend(hass: HomeAssistant) -> None:
     Storage-mode Lovelace: a managed Lovelace resource (survives in long-lived app shells such as the Companion app,
     which never re-read extra_js_url). Otherwise (YAML mode, no lovelace, or an error): add_extra_js_url. Never both,
     so two versions of the guarded customElements.define can't race. Decided once per Home Assistant run.
+    The icon set (/crew_hub/bridge-icons.js, prefix "bridge:") always goes through extra_js_url: the sidebar needs it
+    on every page, not only on dashboards.
     """
     if hass.data.get(DATA_FRONTEND) or "http" not in hass.config.components or hass.http is None:
         return
     digest = await hass.async_add_executor_job(_file_hash, CARD_PATH)
+    icons_digest = await hass.async_add_executor_job(_file_hash, ICONS_PATH)
     await hass.http.async_register_static_paths(
-        [StaticPathConfig(CARD_URL, str(CARD_PATH), True), StaticPathConfig(FONTS_URL, str(FONTS_PATH), True)]
+        [
+            StaticPathConfig(CARD_URL, str(CARD_PATH), True),
+            StaticPathConfig(FONTS_URL, str(FONTS_PATH), True),
+            StaticPathConfig(ICONS_URL, str(ICONS_PATH), True),
+        ]
     )
     url = f"{CARD_URL}?v={VERSION}-{digest}"
     managed = False
@@ -264,4 +274,6 @@ async def _async_register_frontend(hass: HomeAssistant) -> None:
             _LOGGER.warning("Could not manage the Crew Hub card's Lovelace resource, loading it via extra_js_url: %s", err)
     if not managed and "frontend" in hass.config.components:
         frontend.add_extra_js_url(hass, url)
+    if "frontend" in hass.config.components:
+        frontend.add_extra_js_url(hass, f"{ICONS_URL}?v={VERSION}-{icons_digest}")
     hass.data[DATA_FRONTEND] = True

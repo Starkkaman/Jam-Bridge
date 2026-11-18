@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.4
+
+- New sidebar icon: the captain's chair (`bridge:captain-chair`), a 24 px Material-style icon from the crew_hub
+  integration's icon set (needs crew_hub 0.7.1 or later; without it the sidebar entry has no icon).
+- Store icon and logo: the captain's chair redrawn for small sizes (thicker lines, fewer inner lines, the lit button on
+  the right armrest in amber).
+
 ## 0.1.3
 
 - Tickets support the Engineer (an OpenCode agent on the ticket inbox): new statuses "Needs you" (needs_isaac) and
