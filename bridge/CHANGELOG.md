@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.1
+
+- Log lines at info: "listening on … (ingress only)" and "crew_hub websocket connected/disconnected".
+
 ## 0.1.0
 
 - First version of The Bridge server: ingress-only aiohttp app with the page API (docs/BRIDGE.md §6), SSE events,

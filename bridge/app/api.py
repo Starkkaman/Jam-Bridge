@@ -14,7 +14,7 @@ from .crew import COMMAND_ACTIONS, CrewError
 from .db import RETRYABLE, THEMES, USER_TEXT_MAX
 from .n8n import N8nError
 
-APP_VERSION = "0.1.0"
+APP_VERSION = "0.1.1"
 
 LIMITS = {"title": 120, "details": 4000, "comment": 4000, "resolution": 2000}
 CLIENT_ID_RE = re.compile(r"^[A-Za-z0-9_-]{8,64}$")

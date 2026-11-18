@@ -306,6 +306,7 @@ def main(argv=None):
              "configured" if cfg.n8n_url else f"NOT configured: {cfg.config_error}",
              "set" if cfg.n8n_key else "not set", cfg.dev)
     app = build_app(cfg)
+    LOG.info("listening on %s:%s (ingress only)", args.host, args.port)
     web.run_app(app, host=args.host, port=args.port, access_log=None, print=None,
                 handle_signals=True, shutdown_timeout=5)
 

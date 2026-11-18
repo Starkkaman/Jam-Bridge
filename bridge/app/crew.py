@@ -195,6 +195,9 @@ class Crew:
         self.connected = value
         if value:
             self.connected_at = self.clock.now_ms()
+            LOG.info("crew_hub websocket connected (%d machines)", len(self.machines))
+        else:
+            LOG.info("crew_hub websocket disconnected")
         if self.on_connection:
             self.on_connection(value)
 
