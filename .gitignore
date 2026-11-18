@@ -2,3 +2,8 @@ __pycache__/
 *.pyc
 config.json
 *.key
+
+# Real security findings: never in this PUBLIC repo (kept local for mockups/tests)
+bridge/fixtures/n8n/run-security.json
+bridge/fixtures/n8n/agent-output-netaudit.json
+bridge/fixtures/local/
