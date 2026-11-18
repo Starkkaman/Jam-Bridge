@@ -4,9 +4,14 @@ config.json
 *.key
 
 # Real security findings: never in this PUBLIC repo (kept local for mockups/tests)
-bridge/fixtures/n8n/run-security.json
-bridge/fixtures/n8n/agent-output-netaudit.json
+tests/bridge/fixtures/n8n/run-security.json
+tests/bridge/fixtures/n8n/agent-output-netaudit.json
+tests/bridge/fixtures/local/
 bridge/fixtures/local/
 
 # Private working notes (hosts, accounts, session ids): local only, auto-loaded by Claude Code
 CLAUDE.local.md
+
+# Mockup working files hold real fixture data: local only (notes.md is fine to publish)
+design/bridge/*
+!design/bridge/notes.md
