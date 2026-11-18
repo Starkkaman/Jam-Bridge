@@ -33,6 +33,8 @@ async def async_setup_entry(
 
 class CrewNeedsMeSensor(CrewHubEntity, BinarySensorEntity):
     _attr_translation_key = "needs_me"
+    # Fixed entity id: the device name is now "The Bridge", but the id stays binary_sensor.crew_hub_needs_me.
+    entity_id = f"binary_sensor.{DOMAIN}_needs_me"
     _attr_device_class = BinarySensorDeviceClass.PROBLEM
     _unrecorded_attributes = frozenset({"sessions"})
 

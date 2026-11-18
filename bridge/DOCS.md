@@ -1,12 +1,12 @@
 # The Bridge
 
-Crew Hub (your Claude Code sessions) and the n8n agent crew in one Home Assistant page: Overview, Crew, Chat, Tickets,
+Your Claude Code sessions (the `crew_hub` integration) and the n8n agent crew in one Home Assistant page: Overview, Crew, Chat, Tickets,
 Tasks, Library and Inbox. Chats are kept on the Bridge, so a reply that arrives while the page is closed is waiting
 when you come back.
 
 ## Before you start
 
-- The **Crew Hub** integration (`crew_hub`, from this same repository via HACS) must be installed: The Bridge reads
+- The `crew_hub` integration (shown as **The Bridge** in Home Assistant, from this same repository via HACS) must be installed: The Bridge reads
   your Claude sessions through it.
 - Home Assistant Supervisor 2026.11.0 or newer (admin-only panel enforced by the Supervisor, user groups header).
 - Your n8n instance must accept calls from the Home Assistant host (the add-on's traffic leaves with the host's
@@ -41,5 +41,5 @@ when you come back.
 - **"n8n unreachable since …"**: the last good data stays on screen; check `n8n_url` and that n8n accepts the HA
   host. The log shows `n8n.firstContact HTTP <status>` once after each start.
 - **"n8n key missing or wrong"**: paste the key n8n expects into `n8n_key` and restart the app.
-- **Claude sessions missing**: check that the Crew Hub integration is set up; the Bridge reconnects to Home
+- **Claude sessions missing**: check that the `crew_hub` integration is set up; the Bridge reconnects to Home
   Assistant on its own after a restart.

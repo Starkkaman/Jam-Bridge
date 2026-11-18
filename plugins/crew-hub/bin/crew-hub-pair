@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Pair this machine with the Home Assistant Crew Hub. Run it yourself in a terminal (not through Claude): it reads a
+"""Pair this machine with The Bridge in Home Assistant. Run it yourself in a terminal (not through Claude): it reads a
 pairing code or MQTT login without echoing it. See lib/crewhub/pair.py and docs/WEBHOOK.md."""
 import os
 import sys

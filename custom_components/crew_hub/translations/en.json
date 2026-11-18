@@ -2,7 +2,7 @@
   "config": {
     "step": {
       "user": {
-        "title": "Crew Hub",
+        "title": "The Bridge",
         "description": "Shows live Claude Code sessions reported by crew-hubd over MQTT. Each machine publishes under <prefix>/<machine>/.",
         "data": {
           "prefix": "MQTT topic prefix"
@@ -16,14 +16,14 @@
       "invalid_prefix": "Use 1-64 lower-case letters, digits, '-' or '_' (one topic level, no wildcards)."
     },
     "abort": {
-      "single_instance_allowed": "Crew Hub is already set up.",
-      "already_configured": "Crew Hub is already set up."
+      "single_instance_allowed": "The Bridge is already set up.",
+      "already_configured": "The Bridge is already set up."
     }
   },
   "options": {
     "step": {
       "init": {
-        "title": "Crew Hub machines",
+        "title": "The Bridge machines",
         "menu_options": {
           "add": "Add a machine",
           "edit": "Edit a machine",
@@ -149,7 +149,7 @@
       "fields": {
         "machine": {
           "name": "Machine",
-          "description": "Machine id as added in Crew Hub (for example nas). Works the same for MQTT and webhook machines."
+          "description": "Machine id as added in The Bridge (for example nas). Works the same for MQTT and webhook machines."
         },
         "session": {
           "name": "Session",
@@ -157,7 +157,7 @@
         },
         "text": {
           "name": "Text",
-          "description": "The message, up to 4000 characters. The session sees it prefixed with [From Isaac via Crew Hub]."
+          "description": "The message, up to 4000 characters. The session sees it prefixed with [From Isaac via The Bridge]."
         },
         "urgent": {
           "name": "Urgent",
@@ -171,7 +171,7 @@
       "fields": {
         "machine": {
           "name": "Machine",
-          "description": "Machine id as added in Crew Hub (for example nas). Works the same for MQTT and webhook machines."
+          "description": "Machine id as added in The Bridge (for example nas). Works the same for MQTT and webhook machines."
         },
         "session": {
           "name": "Session",
@@ -201,7 +201,7 @@
       "fields": {
         "machine": {
           "name": "Machine",
-          "description": "Machine id as added in Crew Hub (for example nas). Works the same for MQTT and webhook machines."
+          "description": "Machine id as added in The Bridge (for example nas). Works the same for MQTT and webhook machines."
         },
         "session": {
           "name": "Session",
@@ -215,7 +215,7 @@
       "fields": {
         "machine": {
           "name": "Machine",
-          "description": "Machine id as added in Crew Hub (for example nas). Works the same for MQTT and webhook machines."
+          "description": "Machine id as added in The Bridge (for example nas). Works the same for MQTT and webhook machines."
         },
         "session": {
           "name": "Session",
@@ -229,7 +229,7 @@
       "fields": {
         "machine": {
           "name": "Machine",
-          "description": "Machine id as added in Crew Hub (for example nas). Works the same for MQTT and webhook machines."
+          "description": "Machine id as added in The Bridge (for example nas). Works the same for MQTT and webhook machines."
         },
         "folder": {
           "name": "Folder",

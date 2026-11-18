@@ -428,7 +428,7 @@ class CrewHubCard extends HTMLElement {
     // masthead
     this._fresh = E("span", "fresh");
     const bt = E("div", "bt");
-    bt.append(E("h2", "brand", "Crew Hub"), this._fresh);
+    bt.append(E("h2", "brand", "The Bridge"), this._fresh);
     this._newBtn = this._btn("", "hb", "hdr|new", null, () => {
       this._newOpen = !this._newOpen; this._render();
       if (this._newOpen) { const f = this._find("key", "new|name")[0]; if (f) f.focus(); }
@@ -439,7 +439,7 @@ class CrewHubCard extends HTMLElement {
     const mast = E("header", "mast");
     mast.append(bt, this._newBtn, this._helpBtn);
     this._head = E("p", "head");
-    this._note = E("p", "mono notice", "Crew Hub integration not available");
+    this._note = E("p", "mono notice", "The Bridge integration not available");
     // grid: sessions left, the rest right (one column on a phone: New, Plans, sessions, Idle)
     const grid = E("div", "grid"), side = E("div", "side");
     this._sessBox = E("div", "sessions");
@@ -1351,11 +1351,11 @@ class CrewHubCard extends HTMLElement {
   }
   static errText(code, detail) {
     const known = {
-      not_configured: "This machine isn't set up in Crew Hub", commands_disabled: "Commands are off on this machine",
+      not_configured: "This machine isn't set up in The Bridge", commands_disabled: "Commands are off on this machine",
       offline: "Computer offline", not_allowed: "Not allowed for this session", unknown_session: "Session not found",
       unknown_action: "Unknown command", no_ack: "No answer from the machine", not_waiting: "No longer waiting",
       already_answered: "Already answered", unauthorized: "Admins only", publish_failed: "Couldn't publish to MQTT",
-      not_loaded: "Crew Hub isn't loaded", unknown_machine: "Machine not known to Crew Hub", too_many: "Too many dismissed",
+      not_loaded: "The Bridge isn't loaded", unknown_machine: "Machine not known to The Bridge", too_many: "Too many dismissed",
     };
     if (code === "invalid_args") return detail ? "Invalid: " + str(detail) : "Invalid input";
     return known[code] || str(detail || code || "Failed");
@@ -1621,5 +1621,5 @@ class CrewHubCard extends HTMLElement {
 if (!customElements.get("crew-hub-card")) customElements.define("crew-hub-card", CrewHubCard);
 window.customCards = window.customCards || [];
 if (!window.customCards.some(c => c.type === "crew-hub-card"))
-  window.customCards.push({type: "crew-hub-card", name: "Crew Hub", description: "Live Claude Code sessions and agents"});
+  window.customCards.push({type: "crew-hub-card", name: "The Bridge", description: "Live Claude Code sessions and agents"});
 })();

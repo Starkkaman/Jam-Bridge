@@ -1,11 +1,11 @@
-# Crew Hub webhook transport (v1)
+# The Bridge webhook transport (v1)
 
 For machines that roam off the LAN (e.g. a laptop). They reach HA through Isaac's reverse proxy at
 `https://<public HA url>/api/webhook/<webhookId>`. MQTT and the broker stay LAN-only. Commands use the same signed envelopes
 as docs/COMMANDS.md.
 
 ## Pairing
-- In HA, Crew Hub → Configure → Add machine, transport `webhook`. Fields: `id`, `name`, `public_url` (e.g. https://hass.example.com).
+- In HA, The Bridge → Configure → Add machine, transport `webhook`. Fields: `id`, `name`, `public_url` (e.g. https://hass.example.com).
 - HA generates `webhookId` = `secrets.token_hex(32)` and `secret` = `secrets.token_urlsafe(32)` and shows the pairing code
   **once** in the next step. Re-pairing generates new values, and the old ones stop working.
 - Storage (HA 0.3.1+): both live in a private HA Store, `.storage/crew_hub.secrets` (version 1, written 0600):

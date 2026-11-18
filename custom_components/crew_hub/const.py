@@ -1,8 +1,8 @@
-"""Constants for the Crew Hub integration."""
+"""Constants for the The Bridge integration (domain crew_hub)."""
 
 DOMAIN = "crew_hub"
-NAME = "Crew Hub"
-VERSION = "0.6.0"  # keep equal to manifest.json "version"
+NAME = "The Bridge"
+VERSION = "0.7.0"  # keep equal to manifest.json "version"
 
 CONF_PREFIX = "prefix"
 CONF_MACHINES = "machines"

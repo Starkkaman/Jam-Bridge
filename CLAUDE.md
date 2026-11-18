@@ -1,4 +1,4 @@
-# Crew Hub
+# The Bridge (was Crew Hub)
 
 Home Assistant hub for live progress of every Claude Code session/agent, with commands back to sessions, shipped as a
 Claude Code plugin. Brief: PROMPT.md. Design + verified/assumed table: docs/DESIGN.md. Evidence: docs/evidence/.
@@ -26,6 +26,8 @@ real values in CLAUDE.local.md.
 - 0.5.1: card layout jumps fixed (stable first-seen order, fixed-line rows/strips, finished agents held in place, scroll
   compensation incl. Safari/HA scroller); measured with card/measure-jumps.js.
 - 0.6.0: native Windows machine side (lib/crewhub/osdep.py, docs/WINDOWS.md); POSIX paths unchanged. Card in the Jam look.
+- 0.7.0: display name "Crew Hub" → "The Bridge" (docs/BRIDGE.md §10); ids unchanged, entity ids pinned in sensor.py /
+  binary_sensor.py so new installs keep `crew_hub_*`. Send prefix `[From Isaac via The Bridge]`, deny `... from The Bridge`.
 - Playwright for screenshots: `pw-node script.js`.
 
 ## Rules

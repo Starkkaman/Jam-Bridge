@@ -1,8 +1,15 @@
-# Crew Hub
+# The Bridge (Jam-Bridge)
 
 
 > The repo was renamed from JamBoard to Jam-Bridge on 2026-11-18. The plugin marketplace keeps its id `jamboard`, so
 > installed plugins (`crew-hub@jamboard`, `crew-flow@jamboard`) keep working. Old GitHub URLs redirect.
+
+> 0.7.0 (integration and plugin): the display name "Crew Hub" is now "The Bridge" (HACS, Devices & services, the
+> device, the card's header and picker entry, service texts, the plugin's prompts and the message prefix
+> `[From Isaac via The Bridge]`). Ids stay: domain `crew_hub`, entity ids (`sensor.crew_hub_working`,
+> `binary_sensor.crew_hub_needs_me`, `binary_sensor.crew_hub_<machine>_online`, also on new installs),
+> `custom:crew-hub-card`, `/crew_hub/…` URLs, MQTT `crew/`, `~/.claude/crew-hub/`, plugin id `crew-hub@jamboard`.
+> An existing config entry keeps its title until renamed in Home Assistant. Update the plugin on every machine.
 
 Live progress of every Claude Code session and agent, shown in Home Assistant. Each machine runs the `crew-hub`
 Claude Code plugin (hooks + `crew-hubd`), which publishes a snapshot over MQTT. The `crew_hub` integration mirrors
@@ -16,12 +23,12 @@ Tested with Home Assistant 2026.10.4.
 
 1. Install the integration, either way:
    - **HACS:** HACS → Integrations → ⋮ → Custom repositories → add `https://github.com/Starkkaman/Jam-Bridge`,
-     category *Integration*, then install **Crew Hub**.
+     category *Integration*, then install **The Bridge**.
    - **Manual:** copy `custom_components/crew_hub` into `/config/custom_components/crew_hub`.
 2. Restart Home Assistant.
-3. Settings → Devices & services → Add integration → **Crew Hub**. Keep the MQTT prefix `crew` unless the machines'
+3. Settings → Devices & services → Add integration → **The Bridge**. Keep the MQTT prefix `crew` unless the machines'
    `~/.claude/crew-hub/config.json` uses another `prefix`.
-4. Crew Hub → Configure → **Add a machine** for each machine: its `machineId` (for example `nas`) and a display name.
+4. The Bridge → Configure → **Add a machine** for each machine: its `machineId` (for example `nas`) and a display name.
    Home Assistant makes the command secret and shows it **once** as a pairing code; see
    [Pairing MQTT machines](#pairing-mqtt-machines-and-rotating-secrets).
    Machines that publish but aren't added still show on the card, marked "unconfigured".
@@ -37,9 +44,9 @@ Tested with Home Assistant 2026.10.4.
    automatically (storage-mode dashboards: one `module` resource, its `?v=` updated on every card change and removed
    when the integration is deleted), so don't add one by hand. With YAML-mode resources it loads the card on every
    frontend page instead. The card's feed (`crew_hub/subscribe`) is admin-only; other users see
-   "Crew Hub integration not available".
+   "The Bridge integration not available".
 
-Entities (device "Crew Hub"): `sensor.crew_hub_working` (sessions working on online machines),
+Entities (device "The Bridge"): `sensor.crew_hub_working` (sessions working on online machines),
 `binary_sensor.crew_hub_needs_me` (a session is waiting; attribute `sessions` lists up to 5 names, not recorded) and
 `binary_sensor.crew_hub_<machine>_online` per added machine.
 
@@ -55,8 +62,8 @@ after the update; the machines keep their secrets and nothing has to be paired a
 **Pairing an MQTT machine**
 
 1. On the machine, set up MQTT once: `crew-hub-pair --mqtt` asks for the broker host, port, user, password and machine
-   id (leave the command secret empty). Already done on machines that report to Crew Hub over MQTT.
-2. Crew Hub → Configure → **Add a machine**: the `machineId`, a display name, transport **MQTT**. The next step shows a
+   id (leave the command secret empty). Already done on machines that report to The Bridge over MQTT.
+2. The Bridge → Configure → **Add a machine**: the `machineId`, a display name, transport **MQTT**. The next step shows a
    **pairing code** (`crewhub1:…`) **once**. The machine is saved as soon as the code shows; submit the dialog when
    done.
 3. On the machine, run `crew-hub-pair` in your own terminal (not through Claude) and paste the code when asked (hidden
@@ -67,7 +74,7 @@ after the update; the machines keep their secrets and nothing has to be paired a
 Legacy path: under **Advanced** you can still type a secret yourself (at least 16 characters) instead of getting a
 code; then put the same value into the machine's `secrets.json` `commandSecret` by hand.
 
-**Rotating a secret** (lost code, leaked secret, or routine): Crew Hub → Configure → **Edit a machine** → tick
+**Rotating a secret** (lost code, leaked secret, or routine): The Bridge → Configure → **Edit a machine** → tick
 **Re-pair (new secret)** (webhook machines: **Re-pair**). A new code is shown once, and the old secret stops working
 at once: until you run `crew-hub-pair` with the new code on the machine, its commands get no answer ("No answer from
 the machine"; the machine drops commands with a signature it doesn't know). Removing a machine also deletes its
@@ -81,7 +88,7 @@ to Home Assistant over HTTPS instead, through the same public address you use fo
 
 **Pairing**
 
-1. Crew Hub → Configure → **Add a machine**: the `machineId`, a display name, transport **Webhook**, and the public
+1. The Bridge → Configure → **Add a machine**: the `machineId`, a display name, transport **Webhook**, and the public
    Home Assistant URL (`https://…`, no path, for example `https://hass.example.com`). Home Assistant generates the
    webhook id and the secret (a secret typed under **Advanced** is ignored for webhook machines).
 2. The next step shows a **pairing code** (`crewhub1:…`) **once**. On the machine, run `crew-hub-pair` in your own
@@ -89,7 +96,7 @@ to Home Assistant over HTTPS instead, through the same public address you use fo
    test request and restarts crew-hubd. The machine is saved in Home Assistant as soon as the code shows, so the test
    request works while the dialog is open; submit the dialog when done.
 3. The code contains the webhook address and the secret: don't paste it into a chat or a file. Lost it, or think it
-   leaked? Crew Hub → Configure → **Edit a machine** → tick **Re-pair**: a new code is shown once, and the old webhook
+   leaked? The Bridge → Configure → **Edit a machine** → tick **Re-pair**: a new code is shown once, and the old webhook
    and secret stop working at once. Changing the public URL only reaches the machine through a re-pair.
    Removing the machine also removes its webhook.
 
@@ -181,7 +188,7 @@ An orchestrator skill in the same marketplace, successor to savvy-flow: the sess
 tiered workers and reviews their diffs. Rules come from `docs/research/orchestration-efficiency.md`.
 
 - **Install**: `/plugin install crew-flow@jamboard` (needs the `jamboard` marketplace from the Install section; for a
-  one-off try, `claude --plugin-dir plugins/crew-flow`). Crew Hub (`crew-hub@jamboard`) must be installed on the same
+  one-off try, `claude --plugin-dir plugins/crew-flow`). The Bridge (`crew-hub@jamboard`) must be installed on the same
   machine for the dashboard part.
 - **Use**: `/crew-flow <task>`, best with the session at high effort (`claude --effort high`, set at the start).
   Workers: `crew-heavy` (Opus xhigh, insight), `crew-careful` (high, thoroughness), `crew-medium` (medium, standard
@@ -200,7 +207,7 @@ The card uses Callsheet's Jam look (design and mockup: `design/callsheet-harmony
 Assistant's own dark mode (`hass.themes.darkMode`); without it, the device setting. Its two fonts (Jost and IBM Plex
 Mono, OFL) are served by the integration at `/crew_hub/fonts/`, so the card makes no outside requests.
 
-- **Header**: "Crew Hub", "Updated N ago" (▲ in warn ink after 90 s), **+ New** (only when a machine can start
+- **Header**: "The Bridge", "Updated N ago" (▲ in warn ink after 90 s), **+ New** (only when a machine can start
   sessions) and **?** (help). Below it one headline: "2 need you, 3 working."; "2 need you" jumps to the oldest prompt.
 - **Plans**: one row per unfinished plan on any machine and session, plus plans that finished in the last 10 minutes
   ("Done HH:MM"). Each row shows the title, "6/7", a segmented track (one segment per task: done, running, queued,
@@ -232,7 +239,7 @@ Admin users can act on sessions from the card. Each command is signed with the m
 (HMAC-SHA256, docs/COMMANDS.md), published once on `<prefix>/<machine>/cmd` (QoS 1, never retained; webhook
 machines pick it up with their next poll instead), and the card shows
 "Sending…", then "Sent ✓" or the machine's error (no answer within 15 s shows "No answer from the machine").
-Controls appear only when the machine reports `commands.enabled`, is online and added in Crew Hub, and only for the
+Controls appear only when the machine reports `commands.enabled`, is online and added in The Bridge, and only for the
 actions that session allows (`session.controls`):
 
 - **Message box + Send:** sends text (≤ 4000 characters) to the session. **Urgent** delivers it at once and interrupts
@@ -256,7 +263,7 @@ secret, the signature or the text.
 Commands are off until both of these are set on the machine (then restart crew-hubd):
 
 - `~/.claude/crew-hub/secrets.json` (mode 0600): `"commandSecret"` next to `mqttPassword`, written by `crew-hub-pair`
-  from the pairing code (or, legacy, the same secret you typed into Crew Hub). Without it crew-hubd drops every command.
+  from the pairing code (or, legacy, the same secret you typed into The Bridge). Without it crew-hubd drops every command.
 - `~/.claude/crew-hub/config.json` (no secrets in this file):
 
   ```json
@@ -286,7 +293,7 @@ without an answer, and acks every other refusal (`retained`, `stale` (more than 
 `folder_missing`, `folder_untrusted`, `model_not_allowed`, `mode_not_allowed`, `start_failed`, …) on
 `<prefix>/<machine>/ack`. Its log (`crew-hubd.log`) gets the action, command id and outcome only.
 
-- **send:** the session's local inbox socket (zero tokens). The text arrives as `[From Isaac via Crew Hub] …`, and
+- **send:** the session's local inbox socket (zero tokens). The text arrives as `[From Isaac via The Bridge] …`, and
   Claude Code tells the model it came from another session, so a message can't approve a pending prompt.
 - **answer:** the `PermissionRequest` hook (`crew-hook`) holds each permission prompt and question for up to
   `holdSeconds` (0 = report only, never answer) while the normal prompt stays open in the terminal and claude.ai; the

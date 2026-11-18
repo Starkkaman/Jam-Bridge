@@ -23,7 +23,7 @@ O_BINARY = getattr(os, "O_BINARY", 0)  # Windows: no CRT text-mode translation (
 
 POLL_ANSWER = 0.25
 ANSWER_MAX_BYTES = 64 * 1024
-DENY_PREFIX = "Isaac denied this from Crew Hub"
+DENY_PREFIX = "Isaac denied this from The Bridge"
 QUESTION_TOOL = "AskUserQuestion"
 
 

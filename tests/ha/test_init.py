@@ -47,7 +47,7 @@ async def test_config_flow_creates_entry(hass: HomeAssistant, mqtt_mock) -> None
 
     result = await hass.config_entries.flow.async_configure(result["flow_id"], {"prefix": "crew"})
     assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert result["title"] == "Crew Hub"
+    assert result["title"] == "The Bridge"
     assert result["data"] == {"prefix": "crew"}
     assert result["options"] == {"machines": []}
     await hass.async_block_till_done()

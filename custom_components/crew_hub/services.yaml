@@ -6,7 +6,7 @@ send_message:
   fields:
     machine:
       name: "Machine"
-      description: "Machine id as added in Crew Hub (for example nas). Works the same for MQTT and webhook machines."
+      description: "Machine id as added in The Bridge (for example nas). Works the same for MQTT and webhook machines."
       required: true
       selector: {text: {}}
     session:
@@ -16,7 +16,7 @@ send_message:
       selector: {text: {}}
     text:
       name: "Text"
-      description: "The message, up to 4000 characters. The session sees it prefixed with [From Isaac via Crew Hub]."
+      description: "The message, up to 4000 characters. The session sees it prefixed with [From Isaac via The Bridge]."
       required: true
       selector: {text: {multiline: true}}
     urgent:
@@ -30,7 +30,7 @@ answer:
   fields:
     machine:
       name: "Machine"
-      description: "Machine id as added in Crew Hub (for example nas). Works the same for MQTT and webhook machines."
+      description: "Machine id as added in The Bridge (for example nas). Works the same for MQTT and webhook machines."
       required: true
       selector: {text: {}}
     session:
@@ -62,7 +62,7 @@ interrupt:
   fields:
     machine:
       name: "Machine"
-      description: "Machine id as added in Crew Hub (for example nas). Works the same for MQTT and webhook machines."
+      description: "Machine id as added in The Bridge (for example nas). Works the same for MQTT and webhook machines."
       required: true
       selector: {text: {}}
     session:
@@ -76,7 +76,7 @@ stop:
   fields:
     machine:
       name: "Machine"
-      description: "Machine id as added in Crew Hub (for example nas). Works the same for MQTT and webhook machines."
+      description: "Machine id as added in The Bridge (for example nas). Works the same for MQTT and webhook machines."
       required: true
       selector: {text: {}}
     session:
@@ -90,7 +90,7 @@ start_session:
   fields:
     machine:
       name: "Machine"
-      description: "Machine id as added in Crew Hub (for example nas). Works the same for MQTT and webhook machines."
+      description: "Machine id as added in The Bridge (for example nas). Works the same for MQTT and webhook machines."
       required: true
       selector: {text: {}}
     folder:

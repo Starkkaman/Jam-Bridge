@@ -290,8 +290,8 @@ class PairTest(unittest.TestCase):
     def test_bad_codes_change_nothing_and_are_not_echoed(self):
         good = make_code(self.hub.url)
         cases = [
-            ("not-a-code-" + SECRET, "not a Crew Hub pairing code"),
-            (good.replace("crewhub1:", "crewhub2:"), "not a Crew Hub pairing code"),
+            ("not-a-code-" + SECRET, "not a pairing code for The Bridge"),
+            (good.replace("crewhub1:", "crewhub2:"), "not a pairing code for The Bridge"),
             ("crewhub1:" + good[9:-6] + "!!", "damaged"),
             ("crewhub1:" + base64.urlsafe_b64encode(b"[1,2]").decode().rstrip("="), "damaged"),
             (make_code(self.hub.url, s="short"), "too short"),

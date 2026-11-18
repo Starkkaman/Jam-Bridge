@@ -1,4 +1,4 @@
-# Crew Hub command protocol (v1)
+# The Bridge command protocol (v1)
 
 Shared contract between the HA integration (signs and publishes) and crew-hubd (verifies and executes). See DESIGN.md §4–§5.
 
@@ -24,7 +24,7 @@ crew-hubd rejects (with an ack error, except when unsigned or bad-signature, whi
 ## Actions (args)
 | action | args | rules |
 |---|---|---|
-| `send` | `{session, text ≤4000, urgent: bool}` | `session` = local session id. Delivered through the inbox socket, priority `now` if urgent else `next`. Text is prefixed `[From Isaac via Crew Hub] `. |
+| `send` | `{session, text ≤4000, urgent: bool}` | `session` = local session id. Delivered through the inbox socket, priority `now` if urgent else `next`. Text is prefixed `[From Isaac via The Bridge] `. |
 | `answer` | `{session, requestId, decision: "allow"\|"deny", message? ≤500, answers?: {questionText: label}}` | Writes `~/.claude/crew-hub/answers/<requestId>.json` (0600) for the waiting hook. Error `not_waiting` / `already_answered`. |
 | `interrupt` | `{session}` | Background (`kind` bg) sessions only: `claude attach <id>` in a pty, one ESC. |
 | `stop` | `{session}` | Background sessions only: `claude stop <id>`. |

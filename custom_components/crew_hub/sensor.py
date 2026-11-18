@@ -7,6 +7,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import CrewHubConfigEntry
+from .const import DOMAIN
 from .entity import CrewHubEntity
 
 
@@ -18,6 +19,8 @@ async def async_setup_entry(
 
 class CrewWorkingSensor(CrewHubEntity, SensorEntity):
     _attr_translation_key = "working"
+    # Fixed entity id: the device name is now "The Bridge", but the id stays sensor.crew_hub_working.
+    entity_id = f"sensor.{DOMAIN}_working"
 
     def _snapshot_key(self) -> int:
         return self._store.working_count()

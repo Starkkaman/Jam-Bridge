@@ -40,7 +40,7 @@ def _store(hass: HomeAssistant) -> CrewStore | None:
 def ws_subscribe(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
     store = _store(hass)
     if store is None:
-        connection.send_error(msg["id"], "not_loaded", "Crew Hub is not set up")
+        connection.send_error(msg["id"], "not_loaded", "The Bridge is not set up")
         return
 
     @callback
@@ -58,7 +58,7 @@ def ws_subscribe(hass: HomeAssistant, connection: websocket_api.ActiveConnection
 def ws_get(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
     store = _store(hass)
     if store is None:
-        connection.send_error(msg["id"], "not_loaded", "Crew Hub is not set up")
+        connection.send_error(msg["id"], "not_loaded", "The Bridge is not set up")
         return
     connection.send_result(msg["id"], {"machines": store.as_dict()})
 
@@ -74,7 +74,7 @@ def ws_get(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg:
 async def ws_command(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
     """Every outcome (refused, no ack, daemon error, ok) is a result {ok, error?, result?} so the card shows it inline."""
     if _store(hass) is None:
-        connection.send_error(msg["id"], "not_loaded", "Crew Hub is not set up")
+        connection.send_error(msg["id"], "not_loaded", "The Bridge is not set up")
         return
     result = await async_send_command(hass, msg["machine"], msg["action"], msg["args"])
     connection.send_result(msg["id"], result)
@@ -93,7 +93,7 @@ async def ws_dismiss(hass: HomeAssistant, connection: websocket_api.ActiveConnec
     """Saved before the result, so a dismissal survives a restart right after the tap."""
     store = _store(hass)
     if store is None:
-        connection.send_error(msg["id"], "not_loaded", "Crew Hub is not set up")
+        connection.send_error(msg["id"], "not_loaded", "The Bridge is not set up")
         return
     error = store.dismiss(msg["machine"], msg["session"], msg["agents"], msg["session_dismissed"])
     if error:

@@ -212,7 +212,7 @@ async def test_machine_and_ha_interoperate(hass, mqtt_mock, hass_client_no_auth,
         sid, frame = sent_frames[0]
         assert sid == SESSION
         assert frame["priority"] == "now"
-        assert frame["message"] == {"role": "user", "content": "[From Isaac via Crew Hub] hello from interop"}
+        assert frame["message"] == {"role": "user", "content": "[From Isaac via The Bridge] hello from interop"}
         assert hass.data[DATA_PENDING] == {}
         assert any(line.startswith("cmd send id=") and line.endswith(" ok") for line in log_lines), log_lines
 

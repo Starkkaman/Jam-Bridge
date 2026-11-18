@@ -1,12 +1,12 @@
 ---
 name: crew-hub-setup
-description: Set up this machine for the Home Assistant Crew Hub (pair it over MQTT on the LAN or the HTTPS webhook when it roams). The person runs the pairing tool in their own terminal; Claude never sees the code or any secret. Invoke with /crew-hub-setup.
+description: Set up this machine for The Bridge in Home Assistant (pair it over MQTT on the LAN or the HTTPS webhook when it roams). The person runs the pairing tool in their own terminal; Claude never sees the code or any secret. Invoke with /crew-hub-setup.
 disable-model-invocation: true
 ---
 
-# Crew Hub setup
+# The Bridge setup
 
-Help the person connect this machine to their Home Assistant Crew Hub.
+Help the person connect this machine to The Bridge in their Home Assistant.
 
 **Hard rule: never ask for, read, print, paste or handle a secret.** That covers the pairing code, MQTT passwords,
 command secrets and webhook ids. Never read `~/.claude/crew-hub/secrets.json` or pass a code in a command. If the
@@ -25,15 +25,15 @@ exposed).
    Windows differences to mention: no interrupt, a refused send can't be detected, see README "Windows".
 3. **Pick the transport.** Ask which applies:
    - **On the home LAN all the time** (a desktop, a server) → MQTT. The person needs the broker host and port, an
-     MQTT user and password, the machine id they added in Crew Hub, and its command secret.
-   - **Roams off the LAN** (a laptop) → webhook. In Home Assistant: Settings → Devices & services → Crew Hub →
+     MQTT user and password, the machine id they added in The Bridge, and its command secret.
+   - **Roams off the LAN** (a laptop) → webhook. In Home Assistant: Settings → Devices & services → The Bridge →
      Configure → Add machine, transport **webhook**. HA shows a pairing code once (it starts with `crewhub1:`).
 4. **Hand over.** Tell them to run it **themselves, in their own Terminal window (not through Claude)**, with the
    absolute path from step 1 in quotes:
    - webhook: `"<plugin root>/bin/crew-hub-pair"` (paste the code at the hidden prompt; optional `--name "MacBook"`)
    - MQTT: `"<plugin root>/bin/crew-hub-pair" --mqtt`
    - Windows (PowerShell has no shebangs): prefix `python3`, with a Windows path, e.g.
-     `python3 "C:\Users\me\.claude\plugins\cache\jamboard\crew-hub\0.6.0\bin\crew-hub-pair"` (add `--mqtt` for MQTT)
+     `python3 "C:\Users\me\.claude\plugins\cache\jamboard\crew-hub\0.7.0\bin\crew-hub-pair"` (add `--mqtt` for MQTT)
 
    It writes `~/.claude/crew-hub/config.json` and `secrets.json` (0600), says "paired as <id> with <host>" (webhook),
    and restarts crew-hubd. Wait until they say it's done.
@@ -43,7 +43,7 @@ exposed).
      new code and pair again), `TLS certificate not trusted`, or a connection error.
    - `python3 -c 'import json,os; s=json.load(open(os.path.expanduser("~/.claude/crew-hub/snapshot.json"))); print(s["machine"]["id"], len(s["sessions"]), "sessions", "commands" in s["machine"])'`
      (the same works from Git Bash on Windows)
-   - The machine should show online on the Crew Hub card.
+   - The machine should show online on The Bridge card.
 6. **Plan-file rule.** Successful pairing already added it to the user-level `~/.claude/CLAUDE.md` (the tool said
    `plan-file rule added to …` or `… is up to date`). If it didn't, or pairing was done with an older plugin, run it
    yourself (no prompts, no secrets, safe to run through Claude):

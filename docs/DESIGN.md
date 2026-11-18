@@ -1,4 +1,4 @@
-# Crew Hub: design proposal (v1, 2026-10-26)
+# The Bridge (was Crew Hub): design proposal (v1, 2026-10-26)
 
 Status: **proposal, nothing built, no HA changes made.** Decisions needed are listed at the end.
 
@@ -172,7 +172,7 @@ No dependencies (Python 3.8+ stdlib only; macOS and Linux both have it). New mac
 1. `/plugin marketplace add <repo>` then `/plugin install crew-hub`.
 2. `/crew-hub-setup` asks for the machine id, broker host, MQTT user/password and the command secret, and stores them in
    `~/.claude/crew-hub/config.json` (0600, never in git). It checks the broker, and from then on every session on that machine reports.
-3. In HA, add the machine in the Crew Hub integration's options (machine id + the same command secret).
+3. In HA, add the machine in The Bridge integration's options (machine id + the same command secret).
 
 Jamfin / savvy-flow plans (agreed with the Jamfin session): the orchestrator rewrites
 `~/.claude/crew-hub/plans/<local session_id>.json` = `{title, phase, done, total, finished, updatedAt, ccrSessionId?, tasks[…]}`

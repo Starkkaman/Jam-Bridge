@@ -267,7 +267,7 @@ class SendTest(TempHome):
             auth, frame = srv.frames()
             self.assertEqual(auth, {"type": "auth", "token": "tok-" + "a" * 28})
             self.assertEqual(frame, {"type": "user", "priority": "now", "from": "crew-hub",
-                                     "message": {"role": "user", "content": "[From Isaac via Crew Hub] status?"}})
+                                     "message": {"role": "user", "content": "[From Isaac via The Bridge] status?"}})
         finally:
             srv.close()
 
@@ -568,7 +568,7 @@ class AnswerRoundTripTest(TempHome):
         _util.assert_mode(self, paths.answers_dir(), 0o700)
         out = self.finish()
         self.assertEqual(json.loads(out), {"hookSpecificOutput": {"hookEventName": "PermissionRequest", "decision": {
-            "behavior": "deny", "message": "Isaac denied this from Crew Hub: not now"}}})
+            "behavior": "deny", "message": "Isaac denied this from The Bridge: not now"}}})
         self.assertFalse(os.path.exists(afile))
         recs = spool_records(self.home)
         self.assertEqual(recs[-1]["ev"], "answered")

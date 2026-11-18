@@ -1,5 +1,5 @@
 {
-  "description": "Crew Hub reporter: redacts each hook payload and appends one line to ~/.claude/crew-hub/spool.jsonl. Prints nothing and exits 0, except a PermissionRequest decision when Home Assistant answers a held prompt (commands enabled).",
+  "description": "The Bridge reporter: redacts each hook payload and appends one line to ~/.claude/crew-hub/spool.jsonl. Prints nothing and exits 0, except a PermissionRequest decision when Home Assistant answers a held prompt (commands enabled).",
   "hooks": {
     "SessionStart": [
       {

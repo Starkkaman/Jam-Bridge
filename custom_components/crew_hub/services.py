@@ -59,7 +59,7 @@ async def _async_require_admin(hass: HomeAssistant, call: ServiceCall) -> None:
     user_id = call.context.user_id
     if not user_id:
         raise ServiceValidationError(
-            "Crew Hub commands must come from an admin user (dashboard or Developer tools); "
+            "The Bridge commands must come from an admin user (dashboard or Developer tools); "
             "automations and scripts without a user can't send them"
         )
     user = await hass.auth.async_get_user(user_id)
@@ -76,7 +76,7 @@ def async_register(hass: HomeAssistant) -> None:
             machine = data.pop("machine")
             result = await async_send_command(hass, machine, action, data)
             if not result.get("ok"):
-                raise HomeAssistantError(f"Crew Hub {action} on {machine} failed: {result.get('error')}")
+                raise HomeAssistantError(f"The Bridge {action} on {machine} failed: {result.get('error')}")
             return result if call.return_response else None
 
         hass.services.async_register(DOMAIN, service, _handle, schema=schema, supports_response=SupportsResponse.OPTIONAL)

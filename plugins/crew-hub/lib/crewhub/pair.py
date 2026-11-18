@@ -1,4 +1,4 @@
-"""crew-hub-pair: set this machine up for Crew Hub. Run by a person in their own terminal, never through Claude.
+"""crew-hub-pair: set this machine up for The Bridge. Run by a person in their own terminal, never through Claude.
 
 Pairing code (hidden input; docs/WEBHOOK.md "Pairing"). Its "t" says which kind (no "t": webhook, codes from 0.3.0):
 - "webhook" (roaming machines): writes config.json (transport webhook, webhook.url, machineId, machineName, commands)
@@ -11,7 +11,7 @@ Pairing code (hidden input; docs/WEBHOOK.md "Pairing"). Its "t" says which kind 
 (hidden), writes the same two files with transport mqtt, then restarts crew-hubd.
 
 After a successful pairing, and alone with --install-plan-rule (no prompts, no secrets: safe to run through Claude),
-it adds or refreshes the Crew Hub plan-file rule block in the user-level ~/.claude/CLAUDE.md (planrule.py).
+it adds or refreshes The Bridge plan-file rule block in the user-level ~/.claude/CLAUDE.md (planrule.py).
 
 Never prints, logs or echoes the code or a secret. --stdin reads the same answers from stdin, one per line (tests).
 """
@@ -77,7 +77,7 @@ def parse_code(code):
     A code without "t" is a webhook code (Home Assistant 0.3.0). PairError on anything off."""
     code = (code or "").strip()
     if not code.startswith(CODE_PREFIX):
-        raise PairError("that is not a Crew Hub pairing code (it starts with %s)" % CODE_PREFIX)
+        raise PairError("that is not a pairing code for The Bridge (it starts with %s)" % CODE_PREFIX)
     if len(code) > CODE_MAX:
         raise PairError("the pairing code is too long")
     raw = code[len(CODE_PREFIX):]
@@ -91,7 +91,7 @@ def parse_code(code):
         raise PairError("the pairing code is damaged (copy it again)")
     kind = data.get("t", KIND_WEBHOOK)
     if kind not in (KIND_WEBHOOK, KIND_MQTT):
-        raise PairError("this kind of pairing code is unknown to this crew-hub-pair (update the Crew Hub plugin)")
+        raise PairError("this kind of pairing code is unknown to this crew-hub-pair (update The Bridge plugin)")
     for key in (("s", "m") if kind == KIND_MQTT else ("u", "w", "s", "m")):
         if not isinstance(data.get(key), str) or not data[key]:
             raise PairError("the pairing code is incomplete (copy it again)")
@@ -311,11 +311,11 @@ def pair_mqtt(args, prompter, out):
         raise PairError("the port must be a number from 1 to 65535")
     username = prompter.ask("MQTT username", old.get("username"))
     password = prompter.secret("MQTT password (empty = keep the saved one)")
-    machine = prompter.ask("Machine id (as added in Crew Hub)", existing.get("machineId") or default_machine_id())
+    machine = prompter.ask("Machine id (as added in The Bridge)", existing.get("machineId") or default_machine_id())
     if not MACHINE_RE.match(machine):
         raise PairError("the machine id may only use a-z, 0-9, _ and - (at most 64)")
     was_webhook = existing.get("transport") == "webhook"
-    command_secret = prompter.secret("Command secret (same as in Crew Hub; empty = %s)" % (
+    command_secret = prompter.secret("Command secret (same as in The Bridge; empty = %s)" % (
         "commands off" if was_webhook else "keep the saved one, or commands off"))
     if command_secret and len(command_secret) < SECRET_MIN:
         raise PairError("the command secret must be at least %d characters" % SECRET_MIN)
@@ -368,7 +368,7 @@ def install_plan_rule(out):
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(prog="crew-hub-pair", description="Pair this machine with the Home Assistant Crew Hub.")
+    ap = argparse.ArgumentParser(prog="crew-hub-pair", description="Pair this machine with The Bridge in Home Assistant.")
     ap.add_argument("--mqtt", action="store_true", help="LAN machine: use the MQTT broker instead of a pairing code")
     ap.add_argument("--name", help="display name for this machine (default: the hostname)")
     ap.add_argument("--stdin", action="store_true", help=argparse.SUPPRESS)

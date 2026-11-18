@@ -11,13 +11,13 @@
       "name": "crew-hub",
       "source": "./plugins/crew-hub",
       "description": "Zero-token live progress of every Claude Code session and agent, published to Home Assistant over MQTT or an HTTPS webhook.",
-      "version": "0.6.0",
+      "version": "0.7.0",
       "category": "mod"
     },
     {
       "name": "crew-flow",
       "source": "./plugins/crew-flow",
-      "description": "Orchestrator skill /crew-flow with lean tiered workers; plans show on the Crew Hub dashboard via the built-in task list.",
+      "description": "Orchestrator skill /crew-flow with lean tiered workers; plans show on The Bridge dashboard via the built-in task list.",
       "version": "0.1.0",
       "category": "productivity"
     }

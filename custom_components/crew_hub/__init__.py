@@ -141,7 +141,7 @@ def _register_webhook(hass: HomeAssistant, entry: CrewHubConfigEntry, hub: Webho
     async def _handle(hass: HomeAssistant, _webhook_id: str, request: web.Request) -> web.Response:
         return await hub.async_handle(mid, request)
 
-    webhook.async_register(hass, DOMAIN, f"Crew Hub {machine.get(CONF_MACHINE_NAME) or mid}", webhook_id, _handle,
+    webhook.async_register(hass, DOMAIN, f"The Bridge {machine.get(CONF_MACHINE_NAME) or mid}", webhook_id, _handle,
                            local_only=False, allowed_methods=[METH_POST])
     entry.async_on_unload(lambda: webhook.async_unregister(hass, webhook_id))
 

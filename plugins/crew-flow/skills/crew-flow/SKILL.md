@@ -1,6 +1,6 @@
 ---
 name: crew-flow
-description: Orchestrated delivery flow. The session model plans, owns design, delegates to lean tiered workers (crew-heavy / crew-careful / crew-medium / crew-light) and adversarially reviews their diffs. Progress reaches the Crew Hub dashboard through the built-in task list. Invoke with /crew-flow <task>.
+description: Orchestrated delivery flow. The session model plans, owns design, delegates to lean tiered workers (crew-heavy / crew-careful / crew-medium / crew-light) and adversarially reviews their diffs. Progress reaches The Bridge dashboard through the built-in task list. Invoke with /crew-flow <task>.
 disable-model-invocation: true
 argument-hint: <task>
 ---
@@ -53,7 +53,7 @@ Task from the user: $ARGUMENTS
   and writes the brief, Careful implements).
 - **Never Heavy for verification** ("run it and check" is Medium with a script, or Light). There is no Fable tier.
 
-## 4. Track (zero extra tokens: the Crew Hub reads these calls)
+## 4. Track (zero extra tokens: The Bridge reads these calls)
 
 - Before delegating, create one task per planned step with **TaskCreate**:
   subject `[<tier>] <Project>: <title>` (tier = heavy|careful|medium|light, same `<Project>` on every task), e.g.

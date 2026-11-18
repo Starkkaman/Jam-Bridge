@@ -1,6 +1,6 @@
-## Crew Hub plan file
+## The Bridge plan file
 Every savvy-flow plan (and any other multi-step plan that uses agents) is also written, as a whole file via Write, to
-`~/.claude/crew-hub/plans/<local session_id>.json`, so the Home Assistant Crew Hub shows its progress:
+`~/.claude/crew-hub/plans/<local session_id>.json`, so The Bridge in Home Assistant shows its progress:
 
 ```
 {"title": "<Project>: <goal>", "phase": "...", "done": 0, "total": 3, "finished": false, "updatedAt": "<ISO time>",
