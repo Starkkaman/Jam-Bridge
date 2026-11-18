@@ -251,3 +251,10 @@ directly with them if they're set up for that"):**
 - Claude side (to design): on-demand session conversation view + two-way thread, encrypted in transit with the machine's
   command secret, secrets masked, no raw tool outputs, never in snapshots; subagents are reached through their session.
 
+**Second factor for n8n (agreed 2026-11-18, NAS agent's proposal):** every /agent-hub/* and /bridge/* webhook will require
+`X-Bridge-Key` in addition to the HA-host allow-list (/agent-hub/chat also accepts Basic auth with the same secret, for HA's
+webhook_conversation). The add-on gets it as an add-on option `n8n_key` (schema `password`), stored in HA's add-on config,
+never in the repo, never logged, never sent to the browser; the server adds the header to every n8n call and reports
+"n8n key missing or wrong" (401/403) as a setup banner. Isaac pastes the key himself. The NAS agent switches the endpoints over
+only when the add-on is ready to test.
+

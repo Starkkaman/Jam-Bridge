@@ -1,173 +1,205 @@
 {
-    "overall": "ok",
-    "updated": "2026-11-18T16:16:03.555Z",
-    "counts": {
-        "ok": 11,
-        "off": 1
-    },
-    "problems": [],
-    "running": [],
-    "agents": [
-        {
-            "id": "n8n:wfExample0000001",
-            "workflowId": "wfExample0000001",
-            "name": "The Bridge: API",
-            "kind": "n8n workflow",
-            "state": "ok",
-            "active": true,
-            "task": null,
-            "last_run": "2026-11-18T16:15:16.239Z",
-            "last_run_ago": "1 min ago",
-            "last_status": "success"
-        },
-        {
-            "id": "n8n:wfExample0000002",
-            "workflowId": "wfExample0000002",
-            "name": "Security Weekly Review",
-            "kind": "n8n workflow",
-            "state": "ok",
-            "active": true,
-            "task": null,
-            "last_run": null,
-            "last_run_ago": "never",
-            "last_status": null
-        },
-        {
-            "id": "n8n:wfExample0000003",
-            "workflowId": "wfExample0000003",
-            "name": "Phone Reply Agent",
-            "kind": "n8n workflow",
-            "state": "ok",
-            "active": true,
-            "task": null,
-            "last_run": "2026-11-18T16:05:07.258Z",
-            "last_run_ago": "11 min ago",
-            "last_status": "success"
-        },
-        {
-            "id": "n8n:wfExample0000004",
-            "workflowId": "wfExample0000004",
-            "name": "Agent Hub: Chat (Assist)",
-            "kind": "n8n workflow",
-            "state": "ok",
-            "active": true,
-            "task": null,
-            "last_run": "2026-11-18T15:32:26.491Z",
-            "last_run_ago": "44 min ago",
-            "last_status": "success"
-        },
-        {
-            "id": "n8n:wfExample0000005",
-            "workflowId": "wfExample0000005",
-            "name": "Agent Hub: Tickets",
-            "kind": "n8n workflow",
-            "state": "ok",
-            "active": true,
-            "task": null,
-            "last_run": null,
-            "last_run_ago": "never",
-            "last_status": null
-        },
-        {
-            "id": "n8n:wfExample0000008",
-            "workflowId": "wfExample0000008",
-            "name": "Download Watcher",
-            "kind": "n8n workflow",
-            "state": "off",
-            "active": false,
-            "task": null,
-            "last_run": null,
-            "last_run_ago": "never",
-            "last_status": null
-        },
-        {
-            "id": "n8n:wfExample0000006",
-            "workflowId": "wfExample0000006",
-            "name": "Download Daily Summary",
-            "kind": "n8n workflow",
-            "state": "ok",
-            "active": true,
-            "task": null,
-            "last_run": "2026-11-18T16:00:45.048Z",
-            "last_run_ago": "15 min ago",
-            "last_status": "success"
-        },
-        {
-            "id": "n8n:wfExample0000007",
-            "workflowId": "wfExample0000007",
-            "name": "Agent Hub: Status",
-            "kind": "n8n workflow",
-            "state": "ok",
-            "active": true,
-            "task": null,
-            "last_run": "2026-11-18T16:16:01.840Z",
-            "last_run_ago": "0 min ago",
-            "last_status": "success"
-        },
-        {
-            "id": "svc:media-agent",
-            "name": "Library agent (Jellyfin)",
-            "kind": "service",
-            "state": "ok",
-            "task": null,
-            "last_run": "2026-11-18",
-            "last_run_ago": "2026-11-18",
-            "last_status": "128 findings in last report",
-            "version": "0.1.0"
-        },
-        {
-            "id": "svc:llm",
-            "name": "Local LLM (llama.cpp)",
-            "kind": "service",
-            "state": "ok",
-            "task": null,
-            "last_status": "ok"
-        },
-        {
-            "id": "svc:wheatley",
-            "name": "Wheatley voice assistant",
-            "kind": "service",
-            "state": "ok",
-            "version": "0.4.1",
-            "last_status": "model loaded"
-        },
-        {
-            "id": "svc:netaudit",
-            "name": "Security audit (netaudit)",
-            "kind": "service",
-            "state": "ok",
-            "last_run": null,
-            "last_run_ago": "no weekly review yet",
-            "last_status": null
-        }
-    ],
-    "tickets": {
-        "open": 0,
-        "recent": [
-            {
-                "id": 3,
-                "type": "test",
-                "agent": null,
-                "title": "(empty test row)",
-                "status": "closed",
-                "created": "2026-11-18T08:01:59.846Z"
-            },
-            {
-                "id": 2,
-                "type": "feature",
-                "agent": "Jellyfin library agent",
-                "title": "Group trailer findings in morning report",
-                "status": "closed",
-                "created": "2026-11-18T07:42:20.850Z"
-            },
-            {
-                "id": 1,
-                "type": "bug",
-                "agent": "test",
-                "title": "TEST ticket from HA form",
-                "status": "closed",
-                "created": "2026-11-18T07:42:00.772Z"
-            }
-        ]
-    }
+ "overall": "ok",
+ "updated": "2026-11-18T17:05:21.480Z",
+ "counts": {
+  "ok": 11,
+  "off": 1
+ },
+ "problems": [],
+ "running": [],
+ "agents": [
+  {
+   "id": "n8n:wfExample0000001",
+   "workflowId": "wfExample0000001",
+   "name": "The Bridge: API",
+   "kind": "n8n workflow",
+   "state": "ok",
+   "active": true,
+   "chat": false,
+   "role": "system",
+   "task": null,
+   "last_run": "2026-11-18T16:15:16.239Z",
+   "last_run_ago": "50 min ago",
+   "last_status": "success"
+  },
+  {
+   "id": "n8n:wfExample0000002",
+   "workflowId": "wfExample0000002",
+   "name": "Security Weekly Review",
+   "kind": "n8n workflow",
+   "state": "ok",
+   "active": true,
+   "chat": true,
+   "role": "security",
+   "task": null,
+   "last_run": null,
+   "last_run_ago": "never",
+   "last_status": null
+  },
+  {
+   "id": "n8n:wfExample0000003",
+   "workflowId": "wfExample0000003",
+   "name": "Phone Reply Agent",
+   "kind": "n8n workflow",
+   "state": "ok",
+   "active": true,
+   "chat": true,
+   "role": "general",
+   "task": null,
+   "last_run": "2026-11-18T16:05:07.258Z",
+   "last_run_ago": "1 h ago",
+   "last_status": "success"
+  },
+  {
+   "id": "n8n:wfExample0000004",
+   "workflowId": "wfExample0000004",
+   "name": "Agent Hub: Chat (Assist)",
+   "kind": "n8n workflow",
+   "state": "ok",
+   "active": true,
+   "chat": true,
+   "role": "general",
+   "task": null,
+   "last_run": "2026-11-18T17:04:04.563Z",
+   "last_run_ago": "1 min ago",
+   "last_status": "success"
+  },
+  {
+   "id": "n8n:wfExample0000005",
+   "workflowId": "wfExample0000005",
+   "name": "Agent Hub: Tickets",
+   "kind": "n8n workflow",
+   "state": "ok",
+   "active": true,
+   "chat": false,
+   "role": "system",
+   "task": null,
+   "last_run": "2026-11-18T16:53:27.668Z",
+   "last_run_ago": "12 min ago",
+   "last_status": "success"
+  },
+  {
+   "id": "n8n:wfExample0000008",
+   "workflowId": "wfExample0000008",
+   "name": "Download Watcher",
+   "kind": "n8n workflow",
+   "state": "off",
+   "active": false,
+   "chat": true,
+   "role": "downloads",
+   "task": null,
+   "last_run": null,
+   "last_run_ago": "never",
+   "last_status": null
+  },
+  {
+   "id": "n8n:wfExample0000006",
+   "workflowId": "wfExample0000006",
+   "name": "Download Daily Summary",
+   "kind": "n8n workflow",
+   "state": "ok",
+   "active": true,
+   "chat": true,
+   "role": "downloads",
+   "task": null,
+   "last_run": "2026-11-18T16:00:45.048Z",
+   "last_run_ago": "1 h ago",
+   "last_status": "success"
+  },
+  {
+   "id": "n8n:wfExample0000007",
+   "workflowId": "wfExample0000007",
+   "name": "Agent Hub: Status",
+   "kind": "n8n workflow",
+   "state": "ok",
+   "active": true,
+   "chat": false,
+   "role": "system",
+   "task": null,
+   "last_run": "2026-11-18T16:31:02.843Z",
+   "last_run_ago": "34 min ago",
+   "last_status": "success"
+  },
+  {
+   "id": "svc:media-agent",
+   "chat": true,
+   "role": "library",
+   "name": "Library agent (Jellyfin)",
+   "kind": "service",
+   "state": "ok",
+   "task": null,
+   "last_run": "2026-11-18",
+   "last_run_ago": "2026-11-18",
+   "last_status": "128 findings in last report",
+   "version": "0.1.0"
+  },
+  {
+   "id": "svc:llm",
+   "chat": false,
+   "role": "service",
+   "name": "Local LLM (llama.cpp)",
+   "kind": "service",
+   "state": "ok",
+   "task": null,
+   "last_status": "ok"
+  },
+  {
+   "id": "svc:wheatley",
+   "chat": false,
+   "role": "service",
+   "name": "Wheatley voice assistant",
+   "kind": "service",
+   "state": "ok",
+   "version": "0.4.1",
+   "last_status": "model loaded"
+  },
+  {
+   "id": "svc:netaudit",
+   "chat": true,
+   "role": "security",
+   "name": "Security audit (netaudit)",
+   "kind": "service",
+   "state": "ok",
+   "last_run": null,
+   "last_run_ago": "no weekly review yet",
+   "last_status": null
+  }
+ ],
+ "tickets": {
+  "open": 0,
+  "recent": [
+   {
+    "id": 4,
+    "type": "question",
+    "agent": "Library",
+    "title": "TEST agent_id ticket",
+    "status": "closed",
+    "created": "2026-11-18T16:53:27.724Z"
+   },
+   {
+    "id": 3,
+    "type": "test",
+    "agent": null,
+    "title": "(empty test row)",
+    "status": "closed",
+    "created": "2026-11-18T08:01:59.846Z"
+   },
+   {
+    "id": 2,
+    "type": "feature",
+    "agent": "Jellyfin library agent",
+    "title": "Group trailer findings in morning report",
+    "status": "closed",
+    "created": "2026-11-18T07:42:20.850Z"
+   },
+   {
+    "id": 1,
+    "type": "bug",
+    "agent": "test",
+    "title": "TEST ticket from HA form",
+    "status": "closed",
+    "created": "2026-11-18T07:42:00.772Z"
+   }
+  ]
+ }
 }
