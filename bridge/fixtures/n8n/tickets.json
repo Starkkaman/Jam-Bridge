@@ -1,0 +1,41 @@
+[
+ {
+  "id": 3,
+  "createdAt": "2026-11-18T08:01:59.846Z",
+  "updatedAt": "2026-11-18T08:02:38.888Z",
+  "type": "test",
+  "agent": null,
+  "title": "(empty test row)",
+  "details": null,
+  "status": "closed",
+  "source": null,
+  "resolution": "empty test request from setup",
+  "comments": null
+ },
+ {
+  "id": 2,
+  "createdAt": "2026-11-18T07:42:20.850Z",
+  "updatedAt": "2026-11-18T07:42:36.398Z",
+  "type": "feature",
+  "agent": "Jellyfin library agent",
+  "title": "Group trailer findings in morning report",
+  "details": "group trailer findings into one line in the morning report. (test ticket)",
+  "status": "closed",
+  "source": "assist",
+  "resolution": "test ticket from setup",
+  "comments": null
+ },
+ {
+  "id": 1,
+  "createdAt": "2026-11-18T07:42:00.772Z",
+  "updatedAt": "2026-11-18T16:15:15.405Z",
+  "type": "bug",
+  "agent": "test",
+  "title": "TEST ticket from HA form",
+  "details": "test, please ignore",
+  "status": "closed",
+  "source": "home-assistant",
+  "resolution": "test ticket from setup",
+  "comments": "[{\"at\":\"2026-11-18T16:15:15.356Z\",\"author\":\"NAS agent\",\"text\":\"endpoint test\"}]"
+ }
+]

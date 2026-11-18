@@ -1,0 +1,34 @@
+[
+ {
+  "id": 1,
+  "createdAt": "2026-11-18T16:00:00.000Z",
+  "updatedAt": "2026-11-18T16:00:00.000Z",
+  "source": "downloads",
+  "title": "Media today",
+  "message": "Attention: 1 stuck Radarr download and 3 stuck Sonarr downloads. New arrivals: Example Movie (2024), Example Show S01E02. Library: 12 trailers have better copies. Reply YES to apply the 12 fixes, or tell me which."
+ },
+ {
+  "id": 2,
+  "createdAt": "2026-11-18T15:00:00.000Z",
+  "updatedAt": "2026-11-18T15:00:00.000Z",
+  "source": "agent",
+  "title": "Assistant",
+  "message": "SABnzbd is idle. Nothing is downloading right now."
+ },
+ {
+  "id": 3,
+  "createdAt": "2026-11-18T14:00:00.000Z",
+  "updatedAt": "2026-11-18T14:00:00.000Z",
+  "source": "security",
+  "title": "Weekly security review",
+  "message": "Audit status: 2 high, 1 medium. 1. Example container: drop extra rights. 2. Example host: tighten the login method. 3. Example account review is due."
+ },
+ {
+  "id": 4,
+  "createdAt": "2026-11-18T13:00:00.000Z",
+  "updatedAt": "2026-11-18T13:00:00.000Z",
+  "source": "downloads",
+  "title": "Stuck in Sonarr: Example Show S02E03",
+  "message": "No files found are eligible for import in /downloads/completed/TV/Example.Show.S02E03/"
+ }
+]
