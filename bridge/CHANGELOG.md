@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.2
+
+- Live updates no longer move the page: the scroll position holds through every re-render (it used to jump to the top
+  of the chat while n8n status, crew snapshots and job ticks arrived). The page goes to the top only when you navigate.
+- Chat: at the bottom of a thread, new replies keep it pinned there; further up, the position holds and a "New reply ↓"
+  chip jumps down.
+- Agents n8n reports as `tracked: false` show "Not tracked" instead of a last run (never as a failure); untracked and
+  system workflows have no Runs section.
+
 ## 0.1.1
 
 - Log lines at info: "listening on … (ingress only)" and "crew_hub websocket connected/disconnected".

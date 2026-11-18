@@ -109,11 +109,11 @@ const needs=()=>SESS.filter(openAsk).sort((a,b)=>tm(a.waiting.since)-tm(b.waitin
 function litAsk(){if(alertN())return null;const n=needs().filter(canAnswer);return n.length&&n[0].waiting.kind==='permission'?n[0].waiting.requestId:null;}
 const working=()=>SESS.filter(s=>s.status==='working'||(s.status==='waiting'&&ANS[(s.waiting||{}).requestId]));
 function aState(a){
-  if(a.state==='error')return{c:'warn',w:'Failed'};
+  if(a.state==='error'&&!untracked(a))return{c:'warn',w:'Failed'};
   if(a.state==='down')return{c:'offline',w:'Not answering'};
   if(a.state==='off'||a.active===false)return{c:'off',w:'Off'};
   if(a.task)return{c:'busy',w:'Running'};
-  if(a.state&&!['ok','idle','running'].includes(a.state))return{c:'run',w:str(a.state)};   // unknown states show as plain labels
+  if(a.state&&!['ok','idle','running'].includes(a.state)&&!(a.state==='error'&&untracked(a)))return{c:'run',w:str(a.state)};   // unknown states show as plain labels
   return{c:'run',w:a.kind==='service'?'Online':'On'};
 }
 const pipOf=c=>c==='off'?'':c;
@@ -129,7 +129,8 @@ const libTotal=()=>{const L=D.library||{};if(L.total!=null)return L.total;const 
 const FINDS=()=>arr(D.library&&D.library.findings);
 const NO_RUNS=['Agent Hub: Status','The Bridge: API'];   // they keep no successful runs (n8n side, 2026-11-18)
 const user=()=>(D.state&&D.state.user)||{};
-const hasRuns=a=>!!a.workflowId&&a.hasRuns!==false&&!NO_RUNS.includes(a.name);
+const untracked=a=>a.tracked===false;   // n8n keeps no successful runs for it: no last run to show, never a failure
+const hasRuns=a=>!!a.workflowId&&a.hasRuns!==false&&!untracked(a)&&!isSys(a)&&!NO_RUNS.includes(a.name);
 const health=()=>(D.state&&D.state.health)||{};
 
 /* ---------- state of the page ---------- */
@@ -167,12 +168,12 @@ function guarded(o){
   const db=ap(h('div','db'),h('p',null,o.q),poll);
   const bg=['band','tabbar','toastzone'].map($).concat([root.querySelector('.shell')]);bg.forEach(x=>x.inert=true);dlgOpen=true;
   let closed=false;
-  const close=()=>{if(closed)return;closed=true;dlgOpen=false;bg.forEach(x=>x.inert=false);z.remove();document.removeEventListener('keydown',esc);if(o.back&&o.back.isConnected)o.back.focus();schedule();};
+  const close=()=>{if(closed)return;closed=true;dlgOpen=false;bg.forEach(x=>x.inert=false);z.remove();document.removeEventListener('keydown',esc);if(o.back&&o.back.isConnected)o.back.focus({preventScroll:true});schedule();};
   const esc=e=>{if(e.key==='Escape')close();};
   const act=key(o.act,'',()=>{if(act.disabled)return;close();o.go();});act.disabled=true;
   const df=ap(h('div','df'),key(o.cancel||'Keep waiting','',close),act);
   ap(d,dh,db,df);ap(z,sc,d);sc.addEventListener('click',close);document.addEventListener('keydown',esc);$('dlgroot').append(z);
-  const arm=()=>{if(closed)return;act.disabled=false;act.classList.add('lit');};d.focus();   // focus the dialog, not the armed key
+  const arm=()=>{if(closed)return;act.disabled=false;act.classList.add('lit');};d.focus({preventScroll:true});   // focus the dialog, not the armed key
   const show=CK=>{CK=CK.map(c=>typeof c==='string'?{t:c,v:'go'}:c);
     while(rows.length<CK.length){const v=h('span','v','…'),tx=h('span');poll.append(ap(h('div','ln'),tx,v));rows.push({v,tx});}
     const setV=i=>{const c=CK[i],r=rows[i];r.tx.textContent=c.t;if(c.note)r.tx.append(h('span','pn',c.note));r.v.textContent=c.v==='go'?'GO':c.v==='caut'?'▲ '+(c.word||'CHECK'):'NO-GO';r.v.classList.add(c.v);};
@@ -391,7 +392,7 @@ function machineBlock(m){
 /* ---------- n8n parts ---------- */
 function agentLi(a){const st=aState(a),b=h('button','li');b.type='button';b.addEventListener('click',()=>go('crew',{agent:a.id,crew:'agents'}));
   const lr=tm(a.last_run);
-  const sub=a.kind==='service'?['Service',a.version?'v'+a.version:null,a.last_status].filter(Boolean).join(' · '):(lr?'Last run '+(dayKey(lr)===dayKey(now())?hm(lr):(a.last_run_ago||dmon(lr))):'No runs yet');
+  const sub=a.kind==='service'?['Service',a.version?'v'+a.version:null,a.last_status].filter(Boolean).join(' · '):untracked(a)?'Not tracked':(lr?'Last run '+(dayKey(lr)===dayKey(now())?hm(lr):(a.last_run_ago||dmon(lr))):'No runs yet');
   ap(b,pip(pipOf(st.c)),h('span','t',a.name),h('span','m',st.w),h('span','go'),h('span','s',sub));if(S.agent===a.id)b.setAttribute('aria-current','true');return b;}
 function agentsBlock(){
   const box=h('div','stack'),main_=AGENTS.filter(a=>!isSys(a)),sys=AGENTS.filter(isSys);
@@ -494,7 +495,7 @@ function agentDetail(m){
   m.append(ap(h('div','stack'),hd,h('p','lead',svc?'Service'+(a.version?' · v'+a.version:''):'n8n workflow'+(a.active===false?' · turned off in n8n':''))));
   if(hasRuns(a))useSub(D.runs,a.workflowId,API.runs(a.workflowId),RUN_PICK);
   if(st.c==='warn')m.append(failBanner(a,true));
-  const lr=tm(a.last_run),kv=h('dl','kv');[['State',st.w],['Last run',lr?(svc?(a.last_run_ago||ago(lr)):hm(lr)+' · '+ago(lr)):'Never'],['Result',a.last_status||'—'],['Task',a.task||'None'],['ID',a.id]].forEach(([k,v])=>ap(kv,h('dt',null,k),h('dd',null,v)));
+  const lr=tm(a.last_run),kv=h('dl','kv');[['State',st.w],['Last run',untracked(a)?'Not tracked':lr?(svc?(a.last_run_ago||ago(lr)):hm(lr)+' · '+ago(lr)):'Never'],['Result',a.last_status||'—'],['Task',a.task||'None'],['ID',a.id]].forEach(([k,v])=>ap(kv,h('dt',null,k),h('dd',null,v)));
   const pn=ap(h('div','panel'),kv);
   if(a.chat)pn.append(ap(h('div','keys'),key('Talk','',()=>talk(a)),h('span','dim','Chat with '+short(a.name)+' directly.')));
   m.append(pn);
@@ -502,7 +503,7 @@ function agentDetail(m){
   if(svc){rb.append(grouphd('Output'));const o=useSub(D.output,a.id,API.output(a.id),j=>j&&j.output!==undefined?j.output:j);
     if(o===undefined)rb.append(ERR[API.output(a.id)]?h('p','dim','No output from this service. '+ERR[API.output(a.id)].message):skel(2));
     else{const p=gap(h('div','panel'),'8px');if(o&&tm(o.updated))p.append(h('span','num dim','Updated '+hm(tm(o.updated))+' · '+ago(tm(o.updated))));if(o&&o.text)mdBlocks(o.text,p);else p.append(h('p','dim','Nothing written yet.'));rb.append(p);}}
-  else{rb.append(grouphd('Runs'));
+  else if(!untracked(a)&&!isSys(a)){rb.append(grouphd('Runs'));   // no Runs section for untracked or system workflows
     if(!hasRuns(a))rb.append(h('p','dim',a.workflowId?'This workflow keeps no successful runs.':'No runs reported.'));
     else{const rs=D.runs[a.workflowId],e=ERR[API.runs(a.workflowId)];
       if(rs===undefined)rb.append(e?errState('the runs',e):skel(3));else if(!rs.length)rb.append(h('p','dim','No runs yet.'));
@@ -511,7 +512,7 @@ function agentDetail(m){
   if(!TK)tb.append(ERR.tickets?h('p','dim','Tickets didn\'t load.'):skel(2));
   else{const ts=TK.filter(t=>{const x=agentOfTicket(t);return x&&x.id===a.id;});tb.append(ts.length?ap(h('div','list'),...ts.map(ticketLi)):h('p','dim','No tickets for this agent.'));}
   const nk=ap(h('div','keys'),key('New ticket','',()=>{S.draft={type:'bug',agent:a.id,title:'',details:''};go('tickets',{newT:true});}));nk.style.marginTop='10px';tb.append(nk);
-  m.append(desk?ap(h('div','cols two'),rb,tb):ap(h('div','stack'),rb,tb));
+  m.append(!rb.childNodes.length?tb:desk?ap(h('div','cols two'),rb,tb):ap(h('div','stack'),rb,tb));
 }
 function runDetail(m,a){
   const id=S.run,r=useSub(D.run,id,API.run(id),j=>j&&j.run!==undefined?j.run:j),e=ERR[API.run(id)];
@@ -546,8 +547,7 @@ function upsertMsg(m){const tid=mTid(m);
   if(D.msgs[tid]){const L=D.msgs[tid];const i=L.findIndex(x=>(x.id!=null&&x.id===m.id)||(mCid(m)&&mCid(x)===mCid(m)));if(i>=0)L[i]=Object.assign({},L[i],m);else{L.push(m);L.sort((a,b)=>(mT(a)||0)-(mT(b)||0)||(+a.id||0)-(+b.id||0));}}
   if(D.threads){const t=D.threads.find(x=>x.id===tid);if(t){const L=D.msgs[tid];const last=L&&L.length?L[L.length-1]:m;
     if(!L||last===m||last.id===m.id){t.last={role:m.role,text:m.text,state:m.state};t.last_message_at=mT(m)||now();}else t.last={role:last.role,text:last.text,state:last.state};
-    if(m.role==='agent'&&!(S.view==='chat'&&S.chat===tid&&!document.hidden)&&!m._seen){t.unread=(+t.unread||0)+1;m._seen=1;}}}
-  if(S.view==='chat'&&S.chat===tid&&nearBottom())S.stick=true;}
+    if(m.role==='agent'&&!(S.view==='chat'&&S.chat===tid&&!document.hidden)&&!m._seen){t.unread=(+t.unread||0)+1;m._seen=1;}}}}
 function loadMsgs(id,before){const url=API.messages(id,before);if(LOADING[url])return;LOADING[url]=true;
   get(url).then(j=>{const L=arr(j&&(j.messages||j));const cur=before!=null?arr(D.msgs[id]):[];const seen=new Set(cur.map(x=>x.id));
     D.msgs[id]=L.filter(x=>!seen.has(x.id)).concat(cur);D.more[id]=!!(j&&(j.more||j.hasMore))||(L.length>=50&&!(j&&j.more===false));delete ERR[url];if(before==null)S.stick=true;},
@@ -557,7 +557,15 @@ function threadName(t){if(!t)return'Agent Hub';const tn=t.targetName||t.target_n
 function threadTitle(t){return t.title||(isClaude(t)?threadName(t):t.target&&t.target!=='crew'?threadName(t):'New chat');}
 function threadBusy(t){const L=D.msgs[t.id];if(L&&L.length){const u=[...L].reverse().find(x=>x.role==='user');return !!(u&&INFLIGHT.includes(u.state))&&!isClaude(t);}return !isClaude(t)&&!!(t.last&&t.last.role==='user'&&INFLIGHT.includes(t.last.state))||!!t.busy;}
 function threadSub(t){if(threadBusy(t))return'Thinking…';const l=t.last||{};const tx=str(l.text||t.last_text||t.lastText).replace(/\s+/g,' ');if(!tx)return isClaude(t)?'Message only':'No messages yet';return(l.role==='user'?'You: ':'')+tx;}
-function nearBottom(){return innerHeight+scrollY>=document.documentElement.scrollHeight-120;}
+/* the page scrolls as a whole (inside HA's ingress iframe too): live updates keep its position, see render() */
+const scroller=()=>document.scrollingElement||document.documentElement;
+function nearBottom(px){const se=scroller();return se.scrollTop+innerHeight>=se.scrollHeight-(px==null?80:px);}
+function toBottom(){const se=scroller();se.scrollTop=se.scrollHeight;}
+function threadMark(){if(S.view!=='chat'||!S.chat||S.chat==='list'||S.chat==='new')return null;const L=D.msgs[S.chat];if(!L||!L.length)return{id:S.chat,n:L?0:-1};
+  const l=L[L.length-1];return{id:S.chat,n:L.length,first:L[0].id,last:l.id,role:l.role,st:l.state};}
+function placeChip(){const old=main.querySelector('.newreply');if(old)old.remove();if(!S.newReply||S.view!=='chat'||S.newReply!==S.chat)return;const cp=main.querySelector('.composer');if(!cp)return;
+  const b=h('button','newreply','New reply ↓');b.type='button';b.addEventListener('click',()=>{S.newReply=null;b.remove();toBottom();});cp.prepend(b);}
+addEventListener('scroll',()=>{if(S.newReply&&nearBottom()){S.newReply=null;placeChip();}},{passive:true});
 function markRead(t){if(!t)return;const L=D.msgs[t.id];const last=L&&L.length?mT(L[L.length-1]):null;if(!(+t.unread)&&S.readFor===t.id+':'+last)return;S.readFor=t.id+':'+last;t.unread=0;
   post(API.read,{scope:'thread:'+t.id,at:now()}).catch(()=>{});}
 function chatList(){
@@ -823,20 +831,33 @@ V.settings=function(m){
 
 /* ---------- render (drafts and focus survive the live re-renders) ---------- */
 function bindDraft(el,k){el.dataset.k=k;if(S.drafts[k]!=null)el.value=S.drafts[k];el.addEventListener('input',()=>{S.drafts[k]=el.value;});}
-let lastDesk=null,lastView=null,lampSeen=false;
+let lastDesk=null,lastView=null,lastChat=null,lastMark=null,lampSeen=false;
 try{lampSeen=sessionStorage.getItem('bridge-lamp')==='1';}catch(e){}
 function render(nav){
   if(rq){cancelAnimationFrame(rq);rq=0;}
   derive();paintScheme();lastDesk=isDesk();
   const ae=document.activeElement,fk=ae&&ae.dataset&&ae.dataset.k,sel=fk&&typeof ae.selectionStart==='number'?[ae.selectionStart,ae.selectionEnd]:null;
+  /* live updates must not move the page: the old height holds while main is rebuilt (layout reads in the views would
+     otherwise clamp the scroll to the top), then the position comes back; chat pins to the bottom when it was there */
+  const se=scroller(),sy=se.scrollTop,sh=se.scrollHeight,atBot=nearBottom(),mk0=lastMark,same=!nav&&S.view===lastView&&(S.view!=='chat'||S.chat===lastChat);
+  main.style.minHeight=main.offsetHeight+'px';
   renderBand();renderNav();main.textContent='';
   const bn=S.view==='settings'||S.view==='more'?[]:setupBanners();bn.forEach(b=>main.append(b));
   (V[S.view]||V.now)(main);
   if(bn.length){const cv=main.querySelector('.chatv');if(cv)cv.style.marginTop='0';}
   if(fk){const el=main.querySelector('[data-k="'+(window.CSS&&CSS.escape?CSS.escape(fk):fk)+'"]');if(el&&el!==document.activeElement){el.focus({preventScroll:true});if(sel&&el.setSelectionRange)try{el.setSelectionRange(sel[0],sel[1]);}catch(e){}}}
-  if(nav||S.view!==lastView){main.classList.remove('fade');void main.offsetWidth;main.classList.add('fade');}lastView=S.view;
+  main.style.minHeight='';
+  if(nav||S.view!==lastView){main.classList.remove('fade');void main.offsetWidth;main.classList.add('fade');}
+  if(!same)S.newReply=null;
+  lastView=S.view;lastChat=S.chat;
   root.style.setProperty('--tabh',$('tabbar').offsetHeight+'px');
-  if(S.stick&&S.view==='chat'&&main.querySelector('.convo')&&!main.querySelector('.convo .skel')){S.stick=false;requestAnimationFrame(()=>window.scrollTo(0,document.documentElement.scrollHeight));}
+  const mk1=threadMark();lastMark=mk1;   // what the screen shows now (the data may change before the next render)
+  if(same){const grew=mk0&&mk1&&mk0.id===mk1.id&&(mk0.n!==mk1.n||mk0.last!==mk1.last||mk0.st!==mk1.st);
+    if(grew&&mk0.n>0&&mk1.first!==mk0.first&&mk1.last===mk0.last)se.scrollTop=sy+(se.scrollHeight-sh);   // earlier messages loaded above
+    else if(grew&&atBot){toBottom();S.newReply=null;}
+    else{if(se.scrollTop!==sy)se.scrollTop=sy;if(grew&&mk1.last!==mk0.last&&mk1.role!=='user'&&mk0.n>0)S.newReply=mk1.id;}}
+  if(S.stick&&S.view==='chat'&&main.querySelector('.convo')&&!main.querySelector('.convo .skel')){S.stick=false;S.newReply=null;toBottom();requestAnimationFrame(toBottom);}
+  placeChip();
   if(!lampSeen&&D.crew&&D.state){lampSeen=true;try{sessionStorage.setItem('bridge-lamp','1');}catch(e){}requestAnimationFrame(lampTest);}
 }
 function lampTest(){if(REDUCE)return;const cells=[...root.querySelectorAll('.ann')];const cols=isDesk()?4:3;let i=0;

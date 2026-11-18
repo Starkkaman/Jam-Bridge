@@ -372,3 +372,6 @@ select.inp{appearance:none;background-image:linear-gradient(45deg,transparent 50
 .convo .st{justify-self:center;max-width:64ch;text-align:center;color:var(--dm);font-size:14px;overflow-wrap:anywhere}
 .convo>.lnk{justify-self:center}
 .mc[data-scheme=day]{background-color:var(--g)}
+/* chat: a reply arrived below while reading further up */
+.newreply{position:absolute;left:50%;top:-52px;transform:translateX(-50%);display:inline-flex;align-items:center;min-height:var(--touch);padding:0 14px;background:var(--pn);color:var(--tx);border:1px solid var(--ln);border-radius:2px;font:600 13px/1 var(--f-plate);letter-spacing:.12em;text-transform:uppercase;cursor:pointer;white-space:nowrap}
+.newreply:hover{border-color:var(--tx)}
