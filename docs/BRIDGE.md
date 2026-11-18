@@ -42,7 +42,7 @@ tests/bridge/     test_*.py fake_n8n.py fake_core_ws.py ingress_proxy.py  fixtur
 ```
 - `config.yaml`: `name: "The Bridge"`, `version: "0.1.0"`, `slug: bridge` (permanent: it names the data folder), `arch: [amd64,
   aarch64]`, `init: false`, `startup: application`, `ingress: true`, `ingress_port: 8099`, `panel_title: "The Bridge"`,
-  `panel_icon: "mdi:bridge"`, `panel_admin: true` (written out), `homeassistant_api: true`, `backup: hot`, `backup_pre: "python3
+  `panel_icon: "bridge:captain-chair (custom iconset from crew_hub; was mdi:bridge)"`, `panel_admin: true` (written out), `homeassistant_api: true`, `backup: hot`, `backup_pre: "python3
   /app/backup.py"`, `backup_exclude: [bridge.db, bridge.db-wal, bridge.db-shm]`, `options/schema: n8n_url (url, default
   http://<nas-ip>:<n8n-port>; the real address is set in the add-on options, never in the repo)`. No `ports`, `hassio_api`, `map` or host network.
 - `Dockerfile`: `ARG BUILD_FROM=ghcr.io/home-assistant/base-python:3.14-alpine3.24` (as in Callsheet; no build.yaml), `apk add
