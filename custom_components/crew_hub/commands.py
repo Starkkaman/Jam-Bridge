@@ -7,8 +7,12 @@ Delivery depends on the machine's transport: MQTT machines get a publish on <pre
 retained) and ack on <prefix>/<machine>/ack; webhook machines (docs/WEBHOOK.md) get the envelope queued in
 webhook_transport.WebhookHub for their next poll and ack in a webhook "ack" request. Both acks end in resolve_ack().
 
-Callers: the admin-only websocket command crew_hub/command and the crew_hub.* services (admin users only).
-Never logged: the secret, the signature, message text, prompts, answers. Logged: action, machine, id, outcome.
+Callers: the admin-only websocket commands crew_hub/command and crew_hub/transcript, and the crew_hub.* services
+(admin users only).
+transcript (COMMANDS.md § transcript): the ack's result is sealed with the machine's secret (seal.py); it's verified
+and opened here and only the plaintext goes back to the caller. Never stored, never put in the store or snapshot.
+Never logged: the secret, the signature, message text, prompts, answers, transcripts. Logged: action, machine, id,
+outcome.
 """
 
 from __future__ import annotations
@@ -25,6 +29,7 @@ from typing import Any
 from homeassistant.components import mqtt
 from homeassistant.core import HomeAssistant, callback
 
+from . import seal
 from .const import (
     CONF_MACHINE_ID,
     CONF_MACHINE_TRANSPORT,
@@ -41,6 +46,7 @@ _LOGGER = logging.getLogger(__name__)
 
 PROTOCOL_VERSION = 1
 ACK_TIMEOUT = 15.0  # seconds
+TRANSCRIPT_ACK_TIMEOUT = 15.0  # seconds; the machine reads and seals the transcript before it acks
 MAX_TEXT = 4000
 MAX_PROMPT = 4000
 MAX_NAME = 60
@@ -49,10 +55,12 @@ MAX_ID = 128  # session ids, request ids, preset keys, model and mode names
 MAX_ANSWERS = 16
 MAX_ANSWER_KEY = 1000
 MAX_ANSWER_VALUE = 1000
-MAX_ACK_PAYLOAD = 64 * 1024
+MAX_ACK_PAYLOAD = 128 * 1024  # a sealed transcript: 48 KB plaintext -> 64 KB base64 + the ack around it
+MAX_CURSOR = 512
+TRANSCRIPT_LIMIT = (1, 40)
 
-ACTIONS = ("send", "answer", "interrupt", "stop", "start")
-SESSION_ACTIONS = ("send", "answer", "interrupt", "stop")
+ACTIONS = ("send", "answer", "interrupt", "stop", "start", "transcript")
+SESSION_ACTIONS = ("send", "answer", "interrupt", "stop", "transcript")
 DECISIONS = ("allow", "deny")
 
 
@@ -180,6 +188,17 @@ def validate(action: str, args: Any, snapshot: dict | None) -> dict:
                 clean["answers"] = dict(answers)
     elif action in ("interrupt", "stop"):
         _only(args, ("session",))
+    elif action == "transcript":
+        _only(args, ("session", "after", "limit"))
+        after = _str(args, "after", MAX_CURSOR, required=False)
+        if after is not None:
+            clean["after"] = after
+        limit = args.get("limit")
+        if limit is not None:
+            if isinstance(limit, bool) or not isinstance(limit, int) \
+                    or not TRANSCRIPT_LIMIT[0] <= limit <= TRANSCRIPT_LIMIT[1]:
+                raise CommandError("invalid_args", f"limit must be {TRANSCRIPT_LIMIT[0]} to {TRANSCRIPT_LIMIT[1]}")
+            clean["limit"] = limit
     elif action == "start":
         _only(args, ("folder", "model", "permissionMode", "name", "prompt"))
         folder = _str(args, "folder", MAX_ID)
@@ -241,6 +260,15 @@ def _ack_result(ack: dict) -> dict:
     return out
 
 
+def _open_transcript(secret: str, out: dict) -> dict:
+    """{ok, result: plaintext} from an ok transcript ack whose result is {"sealed": {n, c, t}}; else bad_seal."""
+    sealed = out.get("result", {}).get("sealed") if isinstance(out.get("result"), dict) else None
+    try:
+        return {"ok": True, "result": seal.open_json(secret, sealed)}
+    except seal.SealError:
+        return {"ok": False, "error": "bad_seal"}
+
+
 # ---- send ----
 def _machine_config(hass: HomeAssistant, machine: str) -> tuple[dict, str] | None:
     """(the machine's options entry, its command secret from secret_store.py) when it has a secret."""
@@ -299,7 +327,9 @@ async def async_send_command(hass: HomeAssistant, machine: Any, action: Any, arg
                                 type(err).__name__)
                 return {"ok": False, "error": "publish_failed"}
         try:
-            ack = await asyncio.wait_for(asyncio.shield(fut), ACK_TIMEOUT if timeout is None else timeout)
+            if timeout is None:
+                timeout = TRANSCRIPT_ACK_TIMEOUT if action == "transcript" else ACK_TIMEOUT
+            ack = await asyncio.wait_for(asyncio.shield(fut), timeout)
         except TimeoutError:
             _LOGGER.info("Crew Hub command %s for %s id %s: no_ack", action, machine, cmd_id)
             return {"ok": False, "error": "no_ack"}
@@ -308,6 +338,8 @@ async def async_send_command(hass: HomeAssistant, machine: Any, action: Any, arg
         if not fut.done():
             fut.cancel()
     out = _ack_result(ack)
+    if action == "transcript" and out["ok"]:
+        out = _open_transcript(secret, out)
     _LOGGER.info("Crew Hub command %s for %s id %s: %s", action, machine, cmd_id,
                  "ok" if out["ok"] else out["error"])
     return out

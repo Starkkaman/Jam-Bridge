@@ -5,6 +5,10 @@ crew_hub/get: the full machine map as the result.
 crew_hub/command: {machine, action, args} -> signed command over MQTT or the webhook queue (commands.py); result {ok, error?, result?}.
 crew_hub/dismiss: {machine, session, agents?: [ids], session_dismissed?: bool} -> hides those agents / that idle or ended
 session for every subscriber (store.py filters, dismissed.py persists); result {ok, error?}.
+crew_hub/transcript: {machine, session, after?, limit?} -> the signed transcript command (COMMANDS.md § transcript); the
+sealed ack is verified and opened with the machine's secret (commands.py, seal.py). Result: the plaintext
+{session, cursor, more, turns}; failures are websocket errors with the code (not_configured, no_ack, bad_seal,
+invalid_args, not_allowed, ..., or the machine's not_live / too_large / transcript_unavailable). Never logged or stored.
 """
 
 from __future__ import annotations
@@ -16,8 +20,8 @@ import voluptuous as vol
 from homeassistant.components import websocket_api
 from homeassistant.core import HomeAssistant, callback
 
-from .commands import async_send_command
-from .const import DATA_DISMISSED, DATA_STORE, WS_COMMAND, WS_DISMISS, WS_GET, WS_SUBSCRIBE
+from .commands import TRANSCRIPT_LIMIT, async_send_command
+from .const import DATA_DISMISSED, DATA_STORE, WS_COMMAND, WS_DISMISS, WS_GET, WS_SUBSCRIBE, WS_TRANSCRIPT
 from .store import CrewStore
 
 
@@ -27,6 +31,7 @@ def async_register(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_get)
     websocket_api.async_register_command(hass, ws_command)
     websocket_api.async_register_command(hass, ws_dismiss)
+    websocket_api.async_register_command(hass, ws_transcript)
 
 
 def _store(hass: HomeAssistant) -> CrewStore | None:
@@ -102,3 +107,26 @@ async def ws_dismiss(hass: HomeAssistant, connection: websocket_api.ActiveConnec
     if (dismissed := hass.data.get(DATA_DISMISSED)) is not None:
         await dismissed.async_save()
     connection.send_result(msg["id"], {"ok": True})
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({
+    vol.Required("type"): WS_TRANSCRIPT,
+    vol.Required("machine"): str,
+    vol.Required("session"): str,
+    vol.Optional("after"): str,
+    vol.Optional("limit"): vol.All(int, vol.Range(min=TRANSCRIPT_LIMIT[0], max=TRANSCRIPT_LIMIT[1])),
+})
+@websocket_api.async_response
+async def ws_transcript(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
+    """The opened transcript as the result; every failure an error with its code. The plaintext is never logged."""
+    if _store(hass) is None:
+        connection.send_error(msg["id"], "not_loaded", "The Bridge is not set up")
+        return
+    args = {"session": msg["session"], **{k: msg[k] for k in ("after", "limit") if k in msg}}
+    result = await async_send_command(hass, msg["machine"], "transcript", args)
+    if not result.get("ok"):
+        code = str(result.get("error") or "failed")
+        connection.send_error(msg["id"], code, str(result.get("detail") or code))
+        return
+    connection.send_result(msg["id"], result["result"])

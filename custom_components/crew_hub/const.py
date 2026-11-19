@@ -2,7 +2,7 @@
 
 DOMAIN = "crew_hub"
 NAME = "The Bridge"
-VERSION = "0.7.1"  # keep equal to manifest.json "version"
+VERSION = "0.8.0"  # keep equal to manifest.json "version"
 
 CONF_PREFIX = "prefix"
 CONF_MACHINES = "machines"
@@ -39,6 +39,7 @@ WS_SUBSCRIBE = f"{DOMAIN}/subscribe"
 WS_GET = f"{DOMAIN}/get"
 WS_COMMAND = f"{DOMAIN}/command"
 WS_DISMISS = f"{DOMAIN}/dismiss"
+WS_TRANSCRIPT = f"{DOMAIN}/transcript"
 
 # hass.data key: pending command id -> (machine, asyncio.Future) waiting for <prefix>/<machine>/ack
 DATA_PENDING = f"{DOMAIN}_pending"
