@@ -26,11 +26,12 @@ ALLOWED = frozenset({
     ("GET", "bridge/agent-output"),
     ("POST", "bridge/chat"),
     ("POST", "agent-hub/ticket"),
+    ("POST", "bridge/ticket-update"),
     ("POST", "bridge/library/apply"),
     ("POST", "bridge/run-now"),
     ("POST", "bridge/library/scan"),
 })
-TIMEOUTS = {"bridge/chat": 120, "agent-hub/ticket": 20, "bridge/library/apply": 900, "bridge/run-now": 30,
+TIMEOUTS = {"bridge/chat": 120, "agent-hub/ticket": 20, "bridge/ticket-update": 20, "bridge/library/apply": 900, "bridge/run-now": 30,
             "bridge/library/scan": 30}
 GET_TIMEOUT = 15
 MAX_BODY = 1024 * 1024
@@ -126,6 +127,13 @@ class N8n:
             raise err
         if not 200 <= status < 300:
             err = N8nError("http", f"n8n answered HTTP {status}", status)
+            reason = self._error_text(raw)
+            if reason and 400 <= status < 500:
+                err.message = f"n8n: {reason}"
+                if path in ("agent-hub/ticket", "bridge/ticket-update"):
+                    # a refused ticket write (validation): n8n itself is fine
+                    self._set_health(True)
+                    raise err
             # an unknown id (agent-output, run), a workflow that can't re-run (500) or a scan already running (409):
             # n8n itself is fine
             if path in ("bridge/agent-output", "bridge/run", "bridge/run-now", "bridge/library/scan"):
@@ -141,6 +149,19 @@ class N8n:
             raise err from None
         self._set_health(True)
         return data
+
+    @staticmethod
+    def _error_text(raw):
+        """The reason in an n8n error body ({"error"|"message": str}), clipped; None if there isn't one."""
+        try:
+            data = json.loads(raw.decode("utf-8"))
+        except (ValueError, UnicodeDecodeError):
+            return None
+        if isinstance(data, dict):
+            for k in ("error", "message"):
+                if isinstance(data.get(k), str) and data[k].strip():
+                    return data[k].strip()[:300]
+        return None
 
     @staticmethod
     async def _read_limited(resp, limit):
@@ -195,6 +216,9 @@ class N8n:
 
     async def ticket(self, body):
         return await self.request("POST", "agent-hub/ticket", body=body)
+
+    async def ticket_update(self, body):
+        return await self.request("POST", "bridge/ticket-update", body=body)
 
     async def apply(self, body):
         return await self.request("POST", "bridge/library/apply", body=body)

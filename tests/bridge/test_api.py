@@ -426,8 +426,8 @@ async def test_ticket_create_update_and_limits(bridge, fake_n8n):
     assert r.status == 400
     r, d = await bridge.post("/api/tickets/1", {"comment": "thanks", "status": "closed", "clientId": cid()})
     assert r.status == 200
-    body = [p for p in fake_n8n.posts if p["path"] == "agent-hub/ticket"][-1]["body"]
-    assert body["action"] == "update" and body["id"] == 1 and body["author"] == "Alex" and body["comment"] == "thanks"
+    body = [p for p in fake_n8n.posts if p["path"] == "bridge/ticket-update"][-1]["body"]
+    assert body == {"id": 1, "author": "Alex", "comment": "thanks", "status": "closed"}
     assert bridge.jobs.pollers["tickets"]._kick.is_set()  # "right after our ticket writes" (pollers off: tick by hand)
     await bridge.jobs.pollers["tickets"].tick()
     r, d = await bridge.get("/api/tickets")
@@ -469,7 +469,7 @@ async def test_ticket_status_values(bridge, fake_n8n):
     for st in ("open", "in_progress", "needs_isaac", "awaiting_approval", "done", "closed"):
         r, d = await bridge.post("/api/tickets/11", {"status": st, "clientId": cid()})
         assert r.status == 200, st
-        assert [p for p in fake_n8n.posts if p["path"] == "agent-hub/ticket"][-1]["body"]["status"] == st
+        assert [p for p in fake_n8n.posts if p["path"] == "bridge/ticket-update"][-1]["body"]["status"] == st
     for st in ("resolved", "waiting", "Open", 3):
         r, d = await bridge.post("/api/tickets/11", {"status": st, "clientId": cid()})
         assert r.status == 400 and d["code"] == "invalid", st
@@ -478,21 +478,36 @@ async def test_ticket_status_values(bridge, fake_n8n):
 async def test_ticket_approve(bridge, fake_n8n):
     engineer_tickets(fake_n8n)
     await bridge.jobs.pollers["tickets"].tick()
-    posts = lambda: [p for p in fake_n8n.posts if p["path"] == "agent-hub/ticket"]  # noqa: E731
+    posts = lambda: [p for p in fake_n8n.posts if p["path"] == "bridge/ticket-update"]  # noqa: E731
     r, d = await bridge.post("/api/tickets/11", {"approve": True, "clientId": cid()})  # needs_isaac: nothing to approve
     assert r.status == 409 and d["code"] == "not_awaiting" and not posts()
     r, d = await bridge.post("/api/tickets/12", {"approve": True, "comment": "x", "clientId": cid()})
     assert r.status == 400 and not posts()
     r, d = await bridge.post("/api/tickets/12", {"approve": True, "clientId": cid()})
     assert r.status == 200 and d["ok"] is True
-    assert posts()[-1]["body"] == {"action": "update", "id": 12, "author": "Alex", "source": "The Bridge · Alex",
-                                   "comment": "Approved"}
+    assert posts()[-1]["body"] == {"id": 12, "author": "Alex", "comment": "Approved"}
     acts = await bridge.db.a("list_actions")
     assert any(a["kind"] == "ticket.update" and a["summary"] == "approve" and a["outcome"] == "ok" for a in acts)
     # Request changes is a plain comment
     r, d = await bridge.post("/api/tickets/12", {"comment": "Keep the last 200 ids", "clientId": cid()})
     assert r.status == 200 and posts()[-1]["body"]["comment"] == "Keep the last 200 ids"
     assert "status" not in posts()[-1]["body"]
+
+
+async def test_ticket_update_route_and_refusal_text(bridge, fake_n8n):
+    # Regression (2026-11-19): a status change went to agent-hub/ticket (create only) and n8n refused it as empty
+    engineer_tickets(fake_n8n)
+    r, d = await bridge.post("/api/tickets/11", {"status": "open", "clientId": cid()})
+    assert r.status == 200
+    assert not [p for p in fake_n8n.posts if p["path"] == "agent-hub/ticket"]
+    body = [p for p in fake_n8n.posts if p["path"] == "bridge/ticket-update"][-1]["body"]
+    assert body == {"id": 11, "author": "Alex", "status": "open"} and "action" not in body
+    # n8n's own reason reaches the UI, and a refused write doesn't mark n8n unhealthy
+    r, d = await bridge.post("/api/tickets/99", {"status": "open", "clientId": cid()})
+    assert r.status == 409 and d["code"] == "refused" and d["error"] == "n8n: no such ticket"
+    r, d = await bridge.post("/api/tickets", {"title": "", "details": "", "clientId": cid()})
+    assert r.status == 400  # our own check first
+    assert bridge.n8n.health.get("ok", True) is not False
 
 
 async def test_ticket_n8n_down(bridge, fake_n8n):

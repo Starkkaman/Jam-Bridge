@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.1
+
+- Fix: ticket status changes, comments and Approve now go to n8n's ticket-update endpoint. Before, they went to the
+  create endpoint, which refused them as an empty ticket.
+- When n8n refuses a ticket write, the Bridge shows n8n's reason (for example "n8n: no such ticket"), and n8n's health
+  stays green, since n8n itself is fine.
+
 ## 0.2.0
 
 - Agent output: an agent's page shows its **Latest output** (the newest run's summary) above its Runs, in plain words

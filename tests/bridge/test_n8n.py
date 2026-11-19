@@ -29,7 +29,7 @@ async def test_allow_list_is_enforced_before_any_io(tmp_path):
             await n.request(method, path)
         assert e.value.code == "not_allowed"
     assert ("POST", "bridge/chat") in ALLOWED and ("POST", "agent-hub/chat") not in ALLOWED
-    assert len(ALLOWED) == 13
+    assert len(ALLOWED) == 14
     await n.close()
 
 

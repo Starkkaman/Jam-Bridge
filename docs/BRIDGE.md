@@ -236,6 +236,10 @@ https://github.com/Starkkaman/Jam-Bridge to the app store.
 - Tickets carry `agent_id` (POST /agent-hub/ticket accepts it; must match `^(n8n|svc|claude):[\w:.-]{1,80}$`, else stored
   empty; `claude:<session id>` reserved for Claude sessions). /bridge/tickets rows include it; older tickets have null → fall
   back to loose name matching.
+- Ticket writes (corrected 2026-11-19): `POST /agent-hub/ticket` only **creates** (title or details required).
+  Updates go to `POST /webhook/bridge/ticket-update` with `{id, status?, resolution?, comment?, author?}`, no `action`
+  field. Status: open | in_progress | needs_isaac | awaiting_approval | done | closed. Until 0.2.1 the add-on sent
+  updates to the create endpoint, which refused them as empty tickets.
 - `GET /webhook/bridge/library/precheck` → `{playing, sessions, titles[≤5], evening, busy, undo: true, undo_note}`;
   playing/sessions null + `error` if Jellyfin is unreachable. The quiet-hours go/no-go poll reads it (Apply already skips
   anything playing, so it's a hint, not a lock).

@@ -130,22 +130,28 @@ class FakeN8n:
         reply = self.chat_reply if self.chat_reply is not None else f"echo: {body.get('query', '')}"
         return web.json_response({"output": reply})
 
-    async def _ticket(self, request, body):
+    async def _ticket_update(self, request, body):
+        # bridge/ticket-update: {id, status?, resolution?, comment?, author?}; no "action" field
         body = body or {}
-        if body.get("action") == "update":
-            t = next((t for t in self.tickets if t["id"] == body.get("id")), None)
-            if t is None:
-                return web.json_response({"ok": False, "error": "no such ticket"})
-            for k in ("status", "resolution"):
-                if body.get(k) is not None:
-                    t[k] = body[k]
-            if body.get("comment"):
-                comments = json.loads(t["comments"]) if t.get("comments") else []
-                comments.append({"at": "2026-11-18T18:00:00.000Z", "author": body.get("author"),
-                                 "text": body["comment"]})
-                t["comments"] = json.dumps(comments)
-            t["updatedAt"] = "2026-11-18T18:00:00.000Z"
-            return web.json_response({"ok": True, "id": t["id"]})
+        t = next((t for t in self.tickets if t["id"] == body.get("id")), None)
+        if t is None:
+            return web.json_response({"error": "no such ticket"}, status=404)
+        for k in ("status", "resolution"):
+            if body.get(k) is not None:
+                t[k] = body[k]
+        if body.get("comment"):
+            comments = json.loads(t["comments"]) if t.get("comments") else []
+            comments.append({"at": "2026-11-18T18:00:00.000Z", "author": body.get("author"),
+                             "text": body["comment"]})
+            t["comments"] = json.dumps(comments)
+        t["updatedAt"] = "2026-11-18T18:00:00.000Z"
+        return web.json_response({"ok": True, "id": t["id"]})
+
+    async def _ticket(self, request, body):
+        # agent-hub/ticket only creates (like the real one: an update sent here is an empty ticket)
+        body = body or {}
+        if not body.get("title") and not body.get("details"):
+            return web.json_response({"error": "empty ticket: a title or details is required"}, status=400)
         new_id = max([t["id"] for t in self.tickets] + [0]) + 1
         self.tickets.insert(0, {"id": new_id, "createdAt": "2026-11-18T18:00:00.000Z",
                                 "updatedAt": "2026-11-18T18:00:00.000Z", "type": body.get("type"),
@@ -211,6 +217,7 @@ ROUTES = {
     ("GET", "bridge/agent-output"): FakeN8n._output,
     ("POST", "bridge/chat"): FakeN8n._chat,
     ("POST", "agent-hub/ticket"): FakeN8n._ticket,
+    ("POST", "bridge/ticket-update"): FakeN8n._ticket_update,
     ("POST", "bridge/library/apply"): FakeN8n._apply,
     ("POST", "bridge/run-now"): FakeN8n._run_now,
     ("POST", "bridge/library/scan"): FakeN8n._scan,

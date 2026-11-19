@@ -15,7 +15,7 @@ from .crew import COMMAND_ACTIONS, CrewError
 from .db import RETRYABLE, THEMES, TICKET_STATUSES, USER_TEXT_MAX
 from .n8n import N8nError
 
-APP_VERSION = "0.2.0"
+APP_VERSION = "0.2.1"
 
 APPROVE_COMMENT = "Approved"
 LIMITS = {"title": 120, "details": 4000, "comment": 4000, "resolution": 2000}
@@ -777,17 +777,14 @@ async def update_ticket(request, body, user):
         if t is None or t["status"] != "awaiting_approval":
             raise ApiError(409, "not_awaiting", "That ticket is not waiting for approval")
         comment = APPROVE_COMMENT
-    agent_id = body.get("agentId")
-    if agent_id is not None and (not isinstance(agent_id, str) or not agents_mod.AGENT_ID_RE.match(agent_id)):
-        raise ApiError(400, "invalid", "agentId is not a valid agent id")
-    if status is None and resolution is None and comment is None and agent_id is None:
+    if status is None and resolution is None and comment is None:
         raise ApiError(400, "invalid", "Nothing to change")
-    payload = {"action": "update", "id": tid, "author": user.display, "source": f"The Bridge · {user.display}"}
-    for k, v in (("status", status), ("resolution", resolution), ("comment", comment), ("agent_id", agent_id)):
+    # Updates go to bridge/ticket-update: {id, status?, resolution?, comment?, author?} (agent-hub/ticket only creates)
+    payload = {"id": tid, "author": user.display}
+    for k, v in (("status", status), ("resolution", resolution), ("comment", comment)):
         if v is not None:
             payload[k] = v
-    summary = "approve" if approve else ",".join(k for k in ("status", "resolution", "comment", "agent_id")
-                                                 if k in payload)
+    summary = "approve" if approve else ",".join(k for k in ("status", "resolution", "comment") if k in payload)
     return await _ticket_call(request, user, "ticket.update", str(tid), summary, payload, body["clientId"])
 
 
@@ -796,9 +793,14 @@ async def _ticket_call(request, user, kind, target, summary, payload, client_id)
     action_id, existing = await db.a("begin_action", user, kind, target, summary, client_id)
     if existing is not None:
         return duplicate(existing)
+    send = n8n.ticket_update if kind == "ticket.update" else n8n.ticket
     try:
-        res = await n8n.ticket({k: v for k, v in payload.items() if v is not None})
+        res = await send({k: v for k, v in payload.items() if v is not None})
     except N8nError as err:
+        if err.code == "http" and err.status and 400 <= err.status < 500:
+            # n8n refused the write and said why: show its words
+            await db.a("finish_action", action_id, "refused", err.message)
+            raise ApiError(409, "refused", err.message) from None
         await db.a("finish_action", action_id, "timeout" if err.code == "timeout" else "error", err.message)
         raise n8n_error(err) from None
     if isinstance(res, dict) and res.get("ok") is False:
