@@ -328,8 +328,14 @@ def redact(payload, ts, pid=None, plans_dir=None, summaries=True):
 # Compiled on first use only: crew-hook imports this module on every tool call and never masks.
 MASK = "\u2022\u2022\u2022\u2022"
 _SECRET_RES = None
-_KEY_WORDS = (r"(?:pass(?:word|wd|phrase)?|pwd|secret|token|api[_-]?key|apikey|access[_-]?key|private[_-]?key"
-              r"|credentials?|session[_-]?key|signing[_-]?key|webhook[_-]?id)")
+_KEY_WORDS = r"(?:pass(?:word|wd|phrase)?|pwd|secret|token|api[ _-]?key|apikey|key|credential|pin|webhook[_-]?id)"
+VALUE_MAX = 200
+# A key name: the keyword as a whole part of a name (FOO_KEY, mqtt_password, api-key, "api key"; not monkey/bypass),
+# then = or : and the value: up to the closing quote when quoted, else to the end of the line, ";" or ", " (<= 200,
+# plus the rest of a word cut there).
+_ASSIGN_RE = (r"(?im)((?<![A-Za-z0-9])(?:[A-Za-z0-9]+[_.-])*" + _KEY_WORDS + r"s?(?:[_.-][A-Za-z0-9]+)*(?![A-Za-z0-9]))"
+              r"([\"'`]?[ \t]*[:=][ \t]*)"
+              r"(?:([\"'`])([^\r\n]{1,%d}?)\3|([\"'`]?)([^\r\n\"'`;]{1,%d})([^\s\"'`;,]*))" % (VALUE_MAX, VALUE_MAX))
 
 
 def _secret_res():
@@ -344,13 +350,17 @@ def _secret_res():
             (re.compile(r"\b(?:sk-(?:ant-|proj-)?[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}"
                         r"|glpat-[A-Za-z0-9_-]{20,}|xox[abprs]-[A-Za-z0-9-]{10,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{35}"
                         r"|hf_[A-Za-z0-9]{30,}|npm_[A-Za-z0-9]{30,})"), None),
-            # credentials in URLs: scheme://user:<pass>@host
-            (re.compile(r"(\b[A-Za-z][A-Za-z0-9+.-]*://[^\s:/@]+:)([^\s@/]+)(?=@)"), 2),
+            # credentials in URLs: scheme://<user:pass>@host
+            (re.compile(r"(\b[A-Za-z][A-Za-z0-9+.-]*://)([^\s:/@]+:[^\s@/]+)(?=@)"), 2),
+            # secret URL paths and pairing codes: /private_<id> (MCP servers), HA webhook ids, crewhub1:<code>
+            (re.compile(r"(/private_)([A-Za-z0-9_-]{8,})"), 2),
+            (re.compile(r"(/api/webhook/)([A-Za-z0-9_-]{16,})"), 2),
+            (re.compile(r"(\bcrewhub1:)([A-Za-z0-9_-]{4,}={0,2})"), 2),
             # Authorization: Bearer/Basic <value> (the value needs a digit or a token character)
             (re.compile(r"(?i)(\b(?:bearer|basic)\s+)([A-Za-z0-9._~+/=-]*[0-9._~+/=][A-Za-z0-9._~+/=-]*)"
                         r"(?<=[A-Za-z0-9._~+/=-]{8})"), 2),
-            # key = value / "key": "value" assignments
-            (re.compile(r"(?i)(\b[A-Za-z0-9_.-]*" + _KEY_WORDS + r"[A-Za-z0-9_.-]*[\"']?\s*[:=]\s*[\"']?)([^\s\"'`,;]{4,})"), 2),
+            # key = value / "key": "value" / .env FOO_KEY=... assignments
+            (re.compile(_ASSIGN_RE), "assign"),
         )
     return _SECRET_RES
 
@@ -385,8 +395,8 @@ def _high_entropy(run):
     return entropy(run) >= ENTROPY_MIN
 
 
-def _value_ok(v):
-    return not (v.isdigit() and len(v) < 8)  # max_tokens: 4096 is not a secret
+def _counts(name):
+    return name.lower().endswith("tokens")  # max_tokens: 4096 / tokens: 1.2k are counts, not secrets
 
 
 def mask_secrets(text):
@@ -402,13 +412,30 @@ def mask_secrets(text):
         return MASK
 
     def value(m):
-        if not _value_ok(m.group(2)):
-            return m.group(0)
         hit[0] = True
         return m.group(1) + MASK
 
-    for rx, group in _secret_res():
-        text = rx.sub(value if group else whole, text)
+    def assign(m):
+        name, sep = m.group(1), m.group(2)
+        if _counts(name):
+            return m.group(0)
+        if m.group(3) is not None:  # quoted: the whole quoted value
+            hit[0] = True
+            return name + sep + m.group(3) + MASK + m.group(3)
+        v, rest = m.group(6), ""
+        cut = v.find(", ")
+        if cut >= 0:
+            v, rest = v[:cut], v[cut:] + m.group(7)
+        else:
+            v += m.group(7)  # a value cut at VALUE_MAX mid-word: the rest of that word goes too
+        body = v.rstrip()
+        if not body:
+            return m.group(0)
+        hit[0] = True
+        return name + sep + m.group(5) + MASK + v[len(body):] + rest
+
+    for rx, kind in _secret_res():
+        text = rx.sub(assign if kind == "assign" else value if kind else whole, text)
 
     def run(m):
         r = m.group(0)

@@ -296,11 +296,43 @@ class LimitsAndMaskingTest(Base):
                       "TestTranscriptReaderParsesSyntheticEntries2", ""):
             self.assertEqual(redact.mask_secrets(clean), (clean, False))
         self.assertEqual(redact.mask_secrets("https://me:pa55w0rd@example.com/x"),
-                         ("https://me:\u2022\u2022\u2022\u2022@example.com/x", True))
+                         ("https://\u2022\u2022\u2022\u2022@example.com/x", True))
         self.assertEqual(redact.mask_secrets('{"api_key": "abcd1234efgh"}'),
                          ('{"api_key": "\u2022\u2022\u2022\u2022"}', True))
         self.assertEqual(redact.mask_secrets("sha " + "0123456789abcdef" * 3)[0], "sha \u2022\u2022\u2022\u2022")
         self.assertEqual(redact.mask_secrets("-----BEGIN PRIVATE KEY-----\nabc")[0], "\u2022\u2022\u2022\u2022")
+
+
+    def test_multi_word_values_paths_and_codes(self):
+        M = redact.MASK
+        cases = [
+            ("mqtt password: correct horse battery staple", "mqtt password: " + M),
+            ("mqtt password: correct horse battery staple, port 1883", "mqtt password: " + M + ", port 1883"),
+            ('password="correct horse battery", user=bob', 'password="' + M + '", user=bob'),
+            ("{'secret': 'two words'}", "{'secret': '" + M + "'}"),
+            ("PASS=a b c; next", "PASS=" + M + "; next"),
+            ("export FOO_KEY=abc def ghi", "export FOO_KEY=" + M),
+            ("HA_TOKEN=Zz9-short\nOTHER=plain", "HA_TOKEN=" + M + "\nOTHER=plain"),
+            ("api key: my key here", "api key: " + M),
+            ("apikey = k1", "apikey = " + M),
+            ("db_credential: one two", "db_credential: " + M),
+            ("pin: 1234", "pin: " + M),
+            ("passwd=x", "passwd=" + M),
+            ("password: " + "y" * 300 + " tail", "password: " + M + " tail"),
+            ("https://user:pass@host.example/x", "https://" + M + "@host.example/x"),
+            ("http://<ha-host>:9583/private_AbCdEf123_xyz/sse", "http://<ha-host>:9583/private_" + M + "/sse"),
+            ("https://ha.example.com/api/webhook/abcdefABCDEF0123456789xyz?x=1",
+             "https://ha.example.com/api/webhook/" + M + "?x=1"),
+            ("run crew-hub-pair crewhub1:eyJ2IjoxLCJtIjoibWFjIn0= now", "run crew-hub-pair crewhub1:" + M + " now"),
+        ]
+        for raw, want in cases:
+            self.assertEqual(redact.mask_secrets(raw), (want, True), raw)
+        for clean in ("max_tokens: 4096 and more", "tokens: 1200", "monkey: banana", "bypass: yes", "keyboard: x",
+                      "spin: fast", "the password is long", "/private_short/", "/api/webhook/short",
+                      "https://host.example/a:b"):
+            self.assertEqual(redact.mask_secrets(clean), (clean, False), clean)
+        # the commit-hash false positive is accepted
+        self.assertEqual(redact.mask_secrets("commit " + "4774d5a1b2c3d4e5f60718293a4b5c6d7e8f9012")[0], "commit " + M)
 
 
 class LocateTest(Base):
