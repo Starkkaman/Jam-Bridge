@@ -240,6 +240,8 @@ https://github.com/Starkkaman/Jam-Bridge to the app store.
   Updates go to `POST /webhook/bridge/ticket-update` with `{id, status?, resolution?, comment?, author?}`, no `action`
   field. Status: open | in_progress | needs_isaac | awaiting_approval | done | closed. Until 0.2.1 the add-on sent
   updates to the create endpoint, which refused them as empty tickets.
+  Since 2026-11-19 both endpoints answer validation errors with 400 `{"ok": false, "error": "<reason>"}` (e.g. "ticket <id>
+  not found", "nothing to update"); the Bridge shows it as "n8n: <reason>".
 - `GET /webhook/bridge/library/precheck` → `{playing, sessions, titles[≤5], evening, busy, undo: true, undo_note}`;
   playing/sessions null + `error` if Jellyfin is unreachable. The quiet-hours go/no-go poll reads it (Apply already skips
   anything playing, so it's a hint, not a lock).

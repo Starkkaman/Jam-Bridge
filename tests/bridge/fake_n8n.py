@@ -135,7 +135,7 @@ class FakeN8n:
         body = body or {}
         t = next((t for t in self.tickets if t["id"] == body.get("id")), None)
         if t is None:
-            return web.json_response({"error": "no such ticket"}, status=404)
+            return web.json_response({"ok": False, "error": f"ticket {body.get('id')} not found"}, status=400)
         for k in ("status", "resolution"):
             if body.get(k) is not None:
                 t[k] = body[k]
@@ -151,7 +151,7 @@ class FakeN8n:
         # agent-hub/ticket only creates (like the real one: an update sent here is an empty ticket)
         body = body or {}
         if not body.get("title") and not body.get("details"):
-            return web.json_response({"error": "empty ticket: a title or details is required"}, status=400)
+            return web.json_response({"ok": False, "error": "empty ticket: a title or details is required"}, status=400)
         new_id = max([t["id"] for t in self.tickets] + [0]) + 1
         self.tickets.insert(0, {"id": new_id, "createdAt": "2026-11-18T18:00:00.000Z",
                                 "updatedAt": "2026-11-18T18:00:00.000Z", "type": body.get("type"),

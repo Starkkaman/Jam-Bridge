@@ -504,7 +504,7 @@ async def test_ticket_update_route_and_refusal_text(bridge, fake_n8n):
     assert body == {"id": 11, "author": "Alex", "status": "open"} and "action" not in body
     # n8n's own reason reaches the UI, and a refused write doesn't mark n8n unhealthy
     r, d = await bridge.post("/api/tickets/99", {"status": "open", "clientId": cid()})
-    assert r.status == 409 and d["code"] == "refused" and d["error"] == "n8n: no such ticket"
+    assert r.status == 409 and d["code"] == "refused" and d["error"] == "n8n: ticket 99 not found"
     r, d = await bridge.post("/api/tickets", {"title": "", "details": "", "clientId": cid()})
     assert r.status == 400  # our own check first
     assert bridge.n8n.health.get("ok", True) is not False
