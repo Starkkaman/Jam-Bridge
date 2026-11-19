@@ -35,3 +35,23 @@ crew-hubd rejects (with an ack error, except when unsigned or bad-signature, whi
 - `session.kind`: `bg` | `interactive` | `print` (from the session registry).
 - `session.controls`: the actions allowed for that session (e.g. `["send","answer"]`, plus `interrupt`, `stop` for bg).
 - `session.waiting`: `{kind: "permission"|"question", requestId, tool, text, since, questions?: [{question, header?, multiSelect, options: [label…]}], hubCanAnswer: bool}`.
+
+## `transcript` (v1, 2026-11-18): one session's recent conversation, on demand
+Request args: `{session, after?: <cursor string>, limit?: 1..40 (default 20)}`. Allowed for any live session on the machine
+(controls gain `"transcript"`). Never cached or stored on the machine; never part of the snapshot.
+
+The ack's `result` is **sealed**: `{"sealed": {"n": <hex 16-byte nonce>, "c": <base64 ciphertext>, "t": <hex tag>}}`.
+- Keys from the machine's command secret `S`: `ke = HMAC-SHA256(S, "bridge-transcript-enc-v1")`,
+  `km = HMAC-SHA256(S, "bridge-transcript-mac-v1")`.
+- Cipher (stdlib only, both sides): keystream block i = `HMAC-SHA256(ke, n || i as 8-byte big-endian)`, XOR with the
+  UTF-8 JSON plaintext. Tag = `HMAC-SHA256(km, "v1" || n || c)` (encrypt-then-MAC). Random nonce per ack (`os.urandom(16)`).
+  Receivers verify the tag (constant-time) before decrypting; a bad tag is an error `bad_seal`.
+- Plaintext: `{"session", "cursor": <opaque>, "more": bool, "turns": [ ... ]}`, oldest first, where each turn is one of
+  - `{"kind":"user", "at", "text"}`: real prompts only (not tool results, not hook/system text); a Bridge-sent message keeps its prefix.
+  - `{"kind":"assistant", "at", "text", "steps": {"<verb>": count, ...}}`: assistant text, with the tool calls made since the
+    previous text as counts by verb (`read`, `edit`, `write`, `search`, `run`, `web`, `agent`, `other`). No tool inputs or outputs.
+  - `{"kind":"report", "at", "agent", "title", "text"}`: a subagent's final report (last assistant message).
+- Limits: each text ≤ 4000 chars (clipped with "…"); whole plaintext ≤ 48 KB (drop oldest turns first, set `more`).
+- Masking before sealing: anything matching secret patterns (bearer/JWT/api-key/token/password assignments, private-key
+  blocks, 32+ char high-entropy runs) becomes `••••` and the turn gets `"masked": true`.
+- Errors: `not_live`, `too_large`, `transcript_unavailable`.
