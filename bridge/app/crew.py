@@ -3,7 +3,8 @@
 The token is read from the environment on each connect and is never logged, stored or returned. The Supervisor proxy
 runs crew_hub's admin-only commands as its "Supervisor" system user (docs/BRIDGE.md §1 row 1), so the frame allow-list
 below is what keeps this app narrow: auth, crew_hub/subscribe, crew_hub/get, crew_hub/command (send, answer,
-interrupt, stop), crew_hub/dismiss, unsubscribe_events. Nothing else, and no REST.
+interrupt, stop), crew_hub/dismiss, crew_hub/transcript (one session's recent conversation, read on demand and never
+stored: docs/COMMANDS.md § transcript), unsubscribe_events. Nothing else, and no REST.
 
 Reconnects after 1, 2, 5, 10, 30 s and resubscribes.
 """
@@ -20,7 +21,7 @@ import aiohttp
 LOG = logging.getLogger("bridge.crew")
 
 ALLOWED_TYPES = frozenset({"auth", "crew_hub/subscribe", "crew_hub/get", "crew_hub/command", "crew_hub/dismiss",
-                           "unsubscribe_events"})
+                           "crew_hub/transcript", "unsubscribe_events"})
 COMMAND_ACTIONS = frozenset({"send", "answer", "interrupt", "stop"})
 RECONNECT_DELAYS = (1, 2, 5, 10, 30)
 COMMAND_TIMEOUT = 45  # crew_hub waits for the machine's ack itself
@@ -243,6 +244,24 @@ class Crew:
         res = await self._call({"type": "crew_hub/dismiss", "machine": machine, "session": session,
                                 "agents": list(agents or []), "session_dismissed": bool(session_dismissed)})
         return res if isinstance(res, dict) else {"ok": False, "error": "bad_result"}
+
+    async def transcript(self, machine, session, after=None, limit=20):
+        """crew_hub/transcript: the integration asks the machine (signed), checks the sealed answer and sends the
+        plaintext {session, cursor, more, turns} as the websocket result; a failure is a websocket error whose code is
+        the reason (not_live, no_ack, bad_seal, ...). Returns {ok, error?, result?} like command(); raises CrewError
+        only when the link itself is down or slow. Nothing here keeps it."""
+        frame = {"type": "crew_hub/transcript", "machine": machine, "session": session, "limit": int(limit)}
+        if after:
+            frame["after"] = after
+        try:
+            res = await self._call(frame)
+        except CrewError as err:
+            if err.code in ("disconnected", "timeout"):
+                raise
+            return {"ok": False, "error": err.code}
+        if not isinstance(res, dict) or not isinstance(res.get("turns"), list):
+            return {"ok": False, "error": "bad_result"}
+        return {"ok": True, "result": res}
 
     def find_session(self, machine, session_id):
         m = self.machines.get(machine)

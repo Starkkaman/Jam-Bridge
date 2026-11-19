@@ -353,16 +353,17 @@ async def test_claude_thread_send_is_one_way(bridge, fake_core):
     assert bridge.db.get_message(m["id"])["error"] == "no_ack"
 
 
-async def test_claude_status_row_when_session_goes_idle(bridge, fake_core):
+async def test_claude_session_idle_writes_no_status_row(bridge, fake_core):
+    """0.2.0: a Claude thread is a pointer; Claude's text (even its summary) is never stored."""
     t = await open_thread(bridge, "claude", f"nas/{SID}")
     nas = json.loads(json.dumps(fake_core.machines["nas"]))
     s = next(x for x in nas["sessions"] if x["id"] == SID)
     s["status"] = "idle"
     s["summary"] = "Done: all 7 fixes accepted. " + "x" * 300
     await fake_core.push_machine("nas", nas)
-    await wait_for(lambda: bridge.db.list_messages(t["id"]))
-    row = bridge.db.list_messages(t["id"])[-1]
-    assert row["role"] == "status" and row["source"] == "snapshot" and len(row["text"]) == 200
+    await wait_for(lambda: bridge.crew.find_session("nas", SID)["status"] == "idle")
+    await asyncio.sleep(0.1)
+    assert bridge.db.list_messages(t["id"]) == []
 
 
 async def test_claude_command_confirms_and_controls(bridge, fake_core):

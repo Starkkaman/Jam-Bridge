@@ -289,3 +289,39 @@ Request changes is a plain comment; a human comment wakes the Engineer within 15
 "NAS agent" are agents, anyone else is the human. Both statuses feed Now's needs-you count and panels
 (`needsYou.ticketsNeedYou`, `unread.ticketsNeedYou`), after the Claude prompts; the status control sets only
 Open / In progress / Done. "Engineer: notify" and "Engineer: dispatch" are system workflows.
+
+## 13. Agent output, Talk and Claude conversations (0.2.0)
+
+Design: design/bridge/output-talk (mockup, notes, screenshots). Isaac's decisions (2026-11-18): (1) "If I can't chat
+with it, it shouldn't be in Chat"; (2) Claude steps are counts per reply, never tool names or inputs; (3) agents that
+are off but have `chat: true` still get Talk.
+
+**Endpoints** (all audited with the HA user in `actions`):
+
+| Endpoint | Source | Cache | Notes |
+|---|---|---|---|
+| `GET api/agents/{id}/runs/{runId}` | n8n `/bridge/run?id=` | 60 s (15 s while running) | 404 `no_runs` for system, untracked and workflow-less agents; 404 `no_run` when n8n has no such run or it belongs to another workflow. Audit `agent.run`. |
+| `GET api/agents/{id}/output[?fresh=1]` | n8n `/bridge/agent-output?id=svc:…` | 30 s; `fresh` reuses only a copy < 5 s old | Workflows: 404 `no_output`. Unknown service: 404 `not_found`. A known service n8n has no report for: 200 `{output: null, reason: "no_output"}`. Audit `agent.output` (open / refresh). |
+| `GET api/sessions/{machine}/{session}/conversation[?after=<cursor>][&fresh=1]` | crew_hub websocket `crew_hub/transcript {machine, session, after?, limit: 20}` | memory only, ≤ 60 s | Admins only. 503 `crew_disconnected`, 404 `unknown_session`, 409 `offline`, 409 `no_transcript`, 504 `crew_timeout`, 502 `<machine error code>`. `not_live` / `transcript_unavailable` answer 200 `{gone: true, reason}`. Audit `claude.transcript` (open / poll / refresh, "· cached"). |
+| `POST api/sessions/{machine}/{session}/conversation/close` | n/a | n/a | The page left the conversation: the server drops it now. |
+
+**Conversations are never stored.** `conversation.py` keeps the shaped turns in process memory, keyed by
+machine/session, for at most 60 s. They are dropped earlier on close, when the last page disconnects (SSE unsubscribe)
+and on restart. Nothing from a transcript goes into SQLite, the snapshot or the SSE stream; a test greps the data
+folder for a sentinel string from a fake transcript. Turns reach the page as
+`{id, k: user|assistant|report, at, text, via?, steps?, agentId?, title?, masked?}`. A user turn that starts with the
+Bridge prefix (`[From … via The Bridge]`) has the prefix removed and `via: "bridge"`. `steps` keeps only the contract's
+counts (read, search, edit, write, run, web, agent, other). The machine's mask `••••` becomes one token that the page
+draws as •••• plus a MASKED tag.
+
+**Polling.** While a conversation is on screen (the session page `#session/<machine>/<id>`, or a Claude thread in
+Chat), the page asks for `after=<cursor>` every 3 s, only while the tab is visible. It stops and calls close when the
+conversation leaves the screen.
+
+**Chat rules.** `api/threads` lists only two-way threads: Agent Hub; n8n agents with `chat: true` (on or off); and
+Claude sessions whose controls include `send` and `transcript`, on a machine with commands on, that haven't ended.
+The page builds the Claude group from the live sessions. A session without a thread opens one (a pointer thread,
+`kind: "claude"`, target `<machine>/<session>`). Sending uses the stored-message path → `crew_hub/command send`.
+Only what the user sends is stored. The pre-0.2.0 status rows (a session's summary saved when it went idle) are gone.
+Crew shows "Can't chat: <reason>" for sessions and agents that aren't two-way (ended, commands off, can't take
+messages, older Crew Hub without transcript; for agents the reason comes from `chat_note` or a table in the page).

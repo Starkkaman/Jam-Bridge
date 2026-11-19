@@ -377,3 +377,48 @@ select.inp{appearance:none;background-image:linear-gradient(45deg,transparent 50
 /* chat: a reply arrived below while reading further up */
 .newreply{position:absolute;left:50%;top:-52px;transform:translateX(-50%);display:inline-flex;align-items:center;min-height:var(--touch);padding:0 14px;background:var(--pn);color:var(--tx);border:1px solid var(--ln);border-radius:2px;font:600 13px/1 var(--f-plate);letter-spacing:.12em;text-transform:uppercase;cursor:pointer;white-space:nowrap}
 .newreply:hover{border-color:var(--tx)}
+
+/* ===== agent output + Talk + Claude conversation (design/bridge/output-talk, approved 2026-11-18; 0.2.0) ===== */
+.rtag{font:600 12px/1 var(--f-plate);letter-spacing:.12em;text-transform:uppercase;color:var(--dm);border:1px solid var(--ln);border-radius:2px;padding:4px 6px;white-space:nowrap}
+.ctop .rtag{flex:none}
+.nochat{display:flex;gap:8px;align-items:baseline;color:var(--dm);font-size:15px;border-top:1px solid var(--ln);padding-top:10px}
+.nochat .sym{font:600 13px var(--f-plate);flex:none}
+.nochat b{color:var(--tx);font-weight:600}
+.panel .keys .dim{font-size:14px}
+.runmeta{justify-content:flex-start;gap:2px 18px}
+.mc .panel.lo{width:100%;text-align:left;cursor:pointer;color:var(--tx);font:inherit;border-left:2px solid var(--ln)}
+.panel.lo:hover{border-color:var(--dm)}
+.panel.lo .open{color:var(--dm);font-size:14px;text-decoration:underline;text-underline-offset:4px;min-height:24px}
+.clip6{display:-webkit-box;-webkit-line-clamp:6;-webkit-box-orient:vertical;overflow:hidden;white-space:pre-line}
+.steps{display:grid;gap:0}
+.stp{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:2px 10px;align-items:center;padding:8px 0;min-height:40px;font:400 13px/1.4 var(--f-data)}
+.stp + .stp{border-top:1px solid var(--ln)}
+.stp .n{color:var(--tx);overflow-wrap:anywhere;min-width:0}
+.stp .c{color:var(--dm);white-space:nowrap;font-variant-numeric:tabular-nums}
+.stp .why{grid-column:2/4;color:var(--tx);font-size:13px;overflow-wrap:anywhere}
+.lastn{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline;font-size:15px;border-top:1px solid var(--ln);padding-top:10px}
+.mc .well.outw,.outw{white-space:pre-wrap;overflow-wrap:anywhere;display:block}
+.mc .well.outw{max-height:none}
+.outw .more{display:block;margin-top:6px;color:color-mix(in srgb,var(--wtx) 62%,var(--well))}
+.mask{letter-spacing:.08em}
+.mtag{font:600 12px/1 var(--f-plate);letter-spacing:.1em;text-transform:uppercase;color:var(--dm);border:1px solid var(--ln);border-radius:2px;padding:1px 4px;margin-left:5px;vertical-align:1px;white-space:nowrap}
+.mc .well .mtag{color:color-mix(in srgb,var(--wtx) 70%,var(--well));border-color:color-mix(in srgb,var(--wtx) 35%,var(--well))}
+.rptop{min-height:var(--touch)}
+.fetchln{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:0 10px;color:var(--dm);font-size:13px;border-bottom:1px solid var(--ln);padding-bottom:2px}
+.fetchln .lnk{margin-right:-6px}
+.convo .by{justify-self:end;margin-top:-12px;color:var(--dm);font:400 13px var(--f-data);text-align:right}
+.convo .by.bad{color:var(--warn)}
+.convo .stepl{display:grid;gap:6px;padding-left:2px}
+.convo .well.rep{display:grid;max-width:64ch}
+.conv .convo{padding-top:14px}
+.mc button.ag{width:100%;text-align:left;background:none;border:0;padding:4px 0;min-height:var(--touch);color:var(--tx);font:inherit;cursor:pointer}
+button.ag .rep-l{text-decoration:underline;text-underline-offset:4px}
+.agx{display:grid;gap:8px;margin:-4px 0 4px}
+.agx .well{display:grid}
+.offbox{display:grid;gap:6px}
+.offbox p{font-size:14px}
+@container bridge (min-width:960px){
+  .cols.sessd{grid-template-columns:minmax(330px,400px) minmax(0,1fr);gap:24px}
+  .cols.sessd .conv .convo{width:100%}
+  .cols.sessd .composer .panel,.cols.sessd .cnote{width:100%}
+}

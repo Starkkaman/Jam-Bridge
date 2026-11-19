@@ -19,6 +19,7 @@ from aiohttp import web
 from . import api
 from .clock import Clock
 from .config import load_config, setup_logging
+from .conversation import Conversations
 from .crew import Crew
 from .db import DB
 from .jobs import Jobs
@@ -42,9 +43,11 @@ K_DB = web.AppKey("db", object)
 K_N8N = web.AppKey("n8n", object)
 K_CREW = web.AppKey("crew", object)
 K_JOBS = web.AppKey("jobs", object)
+K_CONV = web.AppKey("conversations", object)
 K_HUB = web.AppKey("hub", object)
 K_CLOCK = web.AppKey("clock", object)
 K_STATIC = web.AppKey("static", object)
+K_SWEEP = web.AppKey("conv_sweep", object)
 K_USER = web.RequestKey("user", object)
 
 
@@ -253,8 +256,15 @@ def build_app(cfg, clock=None, pollers=True, connect_crew=True, static_dir=None,
     app[K_CREW] = crew
     jobs = Jobs(db, n8n, crew, hub, clock)
     app[K_JOBS] = jobs
+    conv = Conversations(crew, clock)  # Claude conversations: process memory only, <= 60 s, never in SQLite
+    app[K_CONV] = conv
 
-    hub.on_visibility = jobs.on_visibility
+    def on_visibility(visible):
+        if not visible:  # the last page went away (SSE unsubscribe): forget every conversation now
+            conv.clear()
+        jobs.on_visibility(visible)
+
+    hub.on_visibility = on_visibility
     n8n.on_health = lambda h: hub.publish("health", {"n8n": api.n8n_health(n8n)})
     crew.on_full = lambda m: (hub.publish("crew", {"machines": m, "connected": crew.connected}), jobs.on_crew_full(m))
     crew.on_machine = lambda mid, d: (hub.publish("crew.machine", {"id": mid, "data": d}),
@@ -267,8 +277,13 @@ def build_app(cfg, clock=None, pollers=True, connect_crew=True, static_dir=None,
         if connect_crew:
             crew.start()
         await jobs.start(pollers=pollers)
+        app[K_SWEEP] = asyncio.ensure_future(conv.sweep_loop())
 
     async def on_cleanup(app):
+        app[K_SWEEP].cancel()
+        with contextlib.suppress(asyncio.CancelledError, Exception):
+            await app[K_SWEEP]
+        conv.clear()
         await jobs.stop()
         await crew.stop()
         await n8n.close()

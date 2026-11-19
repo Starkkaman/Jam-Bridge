@@ -54,7 +54,8 @@ const enc=encodeURIComponent;
 const API={state:'api/state',overview:'api/overview',crew:'api/crew',threads:'api/threads',thread:id=>'api/threads/'+enc(id),
   messages:(id,before)=>'api/threads/'+enc(id)+'/messages?limit=50'+(before!=null?'&before='+enc(before):''),send:id=>'api/threads/'+enc(id)+'/messages',
   retry:(id,mid)=>'api/threads/'+enc(id)+'/messages/'+enc(mid)+'/retry',read:'api/read',tickets:'api/tickets',ticket:id=>'api/tickets/'+enc(id),
-  tasks:'api/tasks',runs:wf=>'api/tasks/runs?workflowId='+enc(wf),run:id=>'api/tasks/run?id='+enc(id),output:id=>'api/agents/output?id='+enc(id),
+  tasks:'api/tasks',runs:wf=>'api/tasks/runs?workflowId='+enc(wf),run:(aid,rid)=>'api/agents/'+enc(aid)+'/runs/'+enc(rid),output:aid=>'api/agents/'+enc(aid)+'/output',rerun:'api/agents/rerun',
+  conv:(mk,id,o)=>'api/sessions/'+enc(mk)+'/'+enc(id)+'/conversation'+(o&&o.after?'?after='+enc(o.after):o&&o.fresh?'?fresh=1':''),convClose:(mk,id)=>'api/sessions/'+enc(mk)+'/'+enc(id)+'/conversation/close',
   library:'api/library',precheck:'api/library/precheck',apply:'api/library/apply',inbox:b=>'api/inbox'+(b!=null?'?before='+enc(b):''),
   command:'api/claude/command',dismiss:'api/claude/dismiss',settings:'api/settings',events:'api/events'};
 class ApiError extends Error{constructor(msg,status,code){super(msg);this.status=status;this.code=code;}}
@@ -86,7 +87,7 @@ function onLoaded(k){
 }
 /* refetch whatever the page holds (after an SSE hello: there is no replay) */
 function refetchAll(){['state','crew','overview','threads','tickets','tasks','library','inbox'].forEach(k=>{if(D[k]!=null||ERR[k]){delete ERR[k];load(k,true);}});
-  D.runs={};D.output={};const t=S.chat&&S.chat!=='list'&&S.chat!=='new'?S.chat:null;D.msgs={};D.more={};if(t)loadMsgs(t);}
+  D.runs={};D.run={};D.output={};Object.keys(CONV).forEach(k=>delete CONV[k]);const t=S.chat&&S.chat!=='list'&&S.chat!=='new'?S.chat:null;D.msgs={};D.more={};if(t)loadMsgs(t);}
 
 /* ---------- normalised views of the data ---------- */
 const SYS_NAMES=['The Bridge: API','Phone Reply Agent','Engineer: notify','Engineer: dispatch'];
@@ -146,7 +147,7 @@ const health=()=>(D.state&&D.state.health)||{};
 
 /* ---------- state of the page ---------- */
 const S={view:'now',crew:'claude',agent:null,run:null,chat:null,ticket:null,newT:false,tf:'open',inbox:null,theme:'ha',
-  open:{},draft:{type:'bug',agent:'',title:'',details:''},bad:false,drafts:{},page:{},sse:'connecting',sseDownAt:null,stick:false};
+  open:{},draft:{type:'bug',agent:'',title:'',details:''},bad:false,drafts:{},page:{},sse:'connecting',sseDownAt:null,stick:false,sess:null};
 
 /* ---------- scheme: Settings Follow HA / Night / Day, per HA user on the server ---------- */
 const TH_IN={follow_ha:'ha',auto:'ha',ha:'ha',dark:'night',night:'night',light:'day',day:'day'},TH_OUT={ha:'follow_ha',night:'night',day:'day'};
@@ -229,20 +230,22 @@ const TABS=[['now','Now'],['crew','Crew'],['chat','Chat'],['tickets','Tickets'],
 const RAIL=[['now','Now'],['crew','Crew'],['chat','Chat'],['tickets','Tickets'],['tasks','Tasks'],['library','Library'],['inbox','Inbox']];
 const UNDER_MORE=['tasks','library','inbox','settings'];
 function route(){const v=S.view;
+  if(v==='crew'&&S.sess)return 'session/'+enc(S.sess.mk)+'/'+enc(S.sess.id);
   if(v==='crew'&&S.agent)return 'agent/'+enc(S.agent)+(S.run?'/run/'+enc(S.run):'');
   if(v==='crew')return 'crew'+(S.crew==='agents'?'/agents':'');
   if(v==='chat')return 'chat'+(S.chat&&S.chat!=='list'&&S.chat!=='new'?'/'+enc(S.chat):S.chat==='list'?'/list':'');
   if(v==='tickets')return S.newT?'tickets/new':S.ticket!=null?'ticket/'+enc(S.ticket):'tickets'+(S.tf!=='open'?'/'+S.tf:'');
   return v;}
 function parseRoute(){const p=location.hash.replace(/^#\/?/,'').split('/').map(x=>{try{return decodeURIComponent(x);}catch(e){return x;}});
-  Object.assign(S,{view:'now',agent:null,run:null,ticket:null,newT:false,inbox:null});const v=p[0]||'now';
+  Object.assign(S,{view:'now',agent:null,run:null,ticket:null,newT:false,inbox:null,sess:null});const v=p[0]||'now';
+  if(v==='session'&&p[1]&&p[2]){S.view='crew';S.crew='claude';S.sess={mk:p[1],id:p[2]};return;}
   if(v==='agent'&&p[1]){S.view='crew';S.crew='agents';S.agent=p[1];S.run=p[2]==='run'&&p[3]?p[3]:null;return;}
   if(v==='crew'){S.view='crew';S.crew=p[1]==='agents'?'agents':'claude';return;}
   if(v==='chat'){S.view='chat';S.chat=p[1]==='list'?'list':p[1]||null;return;}
   if(v==='ticket'&&p[1]){S.view='tickets';S.ticket=isNaN(+p[1])?p[1]:+p[1];return;}
   if(v==='tickets'){S.view='tickets';if(p[1]==='new')S.newT=true;else if(['open','needs','progress','done'].includes(p[1]))S.tf=p[1];return;}
   if(['now','tasks','library','inbox','more','settings'].includes(v))S.view=v;}
-function go(view,o){S.view=view;Object.assign(S,{agent:null,run:null,ticket:null,newT:false,inbox:null},o||{});
+function go(view,o){S.view=view;Object.assign(S,{agent:null,run:null,ticket:null,newT:false,inbox:null,sess:null},o||{});
   if(view==='chat'&&!(o&&'chat' in o))S.chat=isDesk()?(S.chat&&S.chat!=='list'?S.chat:null):'list';
   if(view==='chat')S.stick=true;
   const r='#'+route();if(location.hash!==r)history.pushState(null,'',r);render(true);window.scrollTo(0,0);}
@@ -264,6 +267,7 @@ function renderNav(){
   rl.append(navLink('settings','Settings',S.view==='settings','foot'));
 }
 function backOf(){
+  if(S.view==='crew'&&S.sess)return['Crew',()=>go('crew',{crew:'claude'})];
   if(S.view==='crew'&&S.agent&&S.run)return['Agent',()=>go('crew',{agent:S.agent,crew:'agents'})];
   if(S.view==='crew'&&S.agent)return['Crew',()=>go('crew',{crew:'agents'})];
   if(S.view==='tickets'&&(S.ticket!=null||S.newT))return['Tickets',()=>go('tickets')];
@@ -369,12 +373,10 @@ function sessPanel(s){
   const cx=s.ctx||{};
   const meta=ap(h('div','meta'),h('span',null,[modelName(s.model),s.effort,s.costUsd!=null?'$'+(+s.costUsd).toFixed(2):null].filter(Boolean).join(' · ')),cx.max?h('span',null,tok(cx.used)+' of '+tok(cx.max)):null);
   p.append(meta);if(cx.max)p.append(meterEl('Ctx',100*cx.used/cx.max));
-  const kM='msg'+s.id,kX='more'+s.id,acts=h('div','acts');
-  const bm=can(s,'send')?lnk('Message',()=>{S.open[kM]=!S.open[kM];render();}):null,bx=lnk('More',()=>{S.open[kX]=!S.open[kX];render();});if(bm)bm.setAttribute('aria-expanded',!!S.open[kM]);bx.setAttribute('aria-expanded',!!S.open[kX]);
+  const kX='more'+s.id,acts=h('div','acts');
+  const why=sessChatWhy(s);if(why&&!S.sess)p.append(ap(h('p','nochat'),h('span','sym','○'),ap(h('span'),h('b',null,'Can\'t chat: '),why)));   // Isaac: if it can't chat, it isn't in Chat
+  const bm=S.sess||!(can(s,'transcript')||(!why&&s.m.status!=='online'))?null:lnk('Conversation',()=>go('crew',{crew:'claude',sess:{mk:s.mk,id:s.id}})),bx=lnk('More',()=>{S.open[kX]=!S.open[kX];render();});bx.setAttribute('aria-expanded',!!S.open[kX]);   // the session page holds the two-way conversation
   ap(acts,bm,bx);p.append(acts);
-  if(S.open[kM]&&bm){const c=h('div','morebox'),ta=h('textarea','inp'),ck=h('label','chk'),cb=h('input'),dk='cm:'+s.mk+'/'+s.id;ta.rows=2;ta.maxLength=4000;ta.placeholder='Message '+s.name;ta.setAttribute('aria-label','Message');bindDraft(ta,dk);cb.type='checkbox';ap(ck,cb,'Urgent: interrupt the current step');
-    c.append(ta,ap(h('div','row sb'),ck,key('Send','',()=>{const v=str(S.drafts[dk]).trim();if(!v)return;const urgent=cb.checked;
-      command(s.mk,'send',{session:s.id,text:v,urgent}).then(()=>{delete S.drafts[dk];S.open[kM]=false;toast((urgent?'Sent urgent · ':'Sent · ')+s.name);render();},e=>failToast('Not sent',e));})));p.append(c);}
   if(S.open[kX]){const c=h('div','morebox'),kv=h('dl','kv');
     [['Machine',s.mk],['Started',hm(tm(s.startedAt))],['Updated',ago(tm(s.updatedAt))],['Session',str(s.id).slice(0,8)]].forEach(([k,v])=>ap(kv,h('dt',null,k),h('dd',null,v)));
     c.append(kv);
@@ -414,10 +416,33 @@ function agentsBlock(){
     if(open)sys.forEach(a=>sl.append(agentLi(a)));box.append(sl);}
   return box;}
 const RUN_PICK=j=>arr(j&&(j.runs||j));
-function runLi(r,name,fn){const ok=r.status==='success',err=r.status==='error'||r.status==='crashed'||r.status==='failed',d=h(fn?'button':'div','li');if(fn){d.type='button';d.addEventListener('click',fn);}const t0=tm(r.startedAt);
-  const word=ok?'Done':err?'Failed':r.status==='running'||r.status==='waiting'?'Running':str(r.status||'—');
-  ap(d,pip(ok?'run':err?'warn':r.status==='running'?'busy':''),h('span','t',(name?name+' · ':'')+hm(t0)+(t0&&dayKey(t0)!==dayKey(now())?' '+dmon(t0):'')),h('span','m',r.stoppedAt&&r.startedAt?dur(tm(r.stoppedAt)-t0):''),h('span',fn?'go':null),
-    h('span','s',[r.id?'Run '+r.id:'Last run',r.mode,word].filter(Boolean).join(' · ')));
+/* ---------- agent output + Talk (design/bridge/output-talk): plain words for roles, run modes and results ---------- */
+const ROLE={downloads:'Downloads',library:'Library',security:'Security',general:'General',system:'System',service:'Service'};
+const roleTag=a=>a&&ROLE[a.role]?h('span','rtag',ROLE[a.role]):null;
+/* why an agent can't chat: n8n sends chat:false only; the words come from a chat_note field or this table */
+const NOCHAT={'svc:wheatley':'Wheatley has its own voice app.','svc:llm':'it\'s the language model the agents use, not an agent.'};
+const noChatWhy=a=>a.chat_note||NOCHAT[a.id]||(a.role==='system'||isSys(a)?'it only moves data for the Bridge.':'it isn\'t set up for chat yet.');
+const MODE={trigger:'Scheduled',webhook:'From a message',manual:'Started in n8n',cli:'Started by command',integrated:'From the Bridge',retry:'Retried in n8n'};
+const modeW=m=>MODE[m]||str(m);
+const runBad=r=>['error','crashed','failed'].includes(r.status);
+const runWord=r=>r.status==='success'?['run','Done']:runBad(r)?['warn','Failed']:['running','waiting','new'].includes(r.status)?['busy','Running']:r.status==='canceled'?['','Stopped']:['',str(r.status||'—')];
+function whenLong(ms){if(ms==null)return'—';return dayKey(ms)===dayKey(now())?hm(ms):new Date(ms).toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'})+' '+hm(ms);}
+const updatedWord=ms=>now()-ms<3600e3?'Updated '+ago(ms):'Updated '+whenLong(ms)+' · '+ago(ms);
+/* masked secrets arrive as one token (the server swaps the machine's •••• for it); drawn as •••• plus a tiny "masked" tag */
+const MASK=/⟦masked⟧/g;
+function maskInto(el,text){const parts=str(text).split(MASK);parts.forEach((p,i)=>{if(p)el.append(document.createTextNode(p));if(i<parts.length-1){const m=h('span','mask','••••');m.setAttribute('aria-label','hidden secret');el.append(m,h('span','mtag','masked'));}});return el;}
+/* a readout well clipped to max lines, with Show all */
+function outWell(text,max,k,label){
+  const lines=str(text).replace(/\r\n?/g,'\n').split('\n'),long=lines.length>max+2,open=!!S.open[k];
+  const w=h('div','well outw');w.setAttribute('tabindex','0');w.setAttribute('aria-label',label);maskInto(w,(long&&!open?lines.slice(0,max):lines).join('\n'));
+  if(long&&!open)w.append(h('span','more','… '+(lines.length-max)+' more lines'));
+  const box=gap(ap(h('div','stack'),w),'2px');
+  if(long){const b=lnk(open?'Show less':'Show all '+lines.length+' lines',()=>{S.open[k]=!open;render();});b.setAttribute('aria-expanded',open);b.style.justifySelf='start';b.style.marginLeft='-6px';box.append(b);}
+  return box;}
+function patchAgent(id,o){const g=D.crew&&D.crew.agents;if(!g)return;['agents','services','system'].forEach(k=>arr(g[k]).forEach(a=>{if(a.id===id)Object.assign(a,o);}));}
+function runLi(r,name,fn){const [pc,word]=runWord(r),d=h(fn?'button':'div','li');if(fn){d.type='button';d.addEventListener('click',fn);}const t0=tm(r.startedAt);
+  ap(d,pip(pc),h('span','t',(name?name+' · ':'')+whenLong(t0)),h('span','m',r.stoppedAt&&r.startedAt?dur(tm(r.stoppedAt)-t0):''),h('span',fn?'go':null),
+    h('span','s',[r.id?'Run '+r.id:'Last run',r.mode?modeW(r.mode):null,word].filter(Boolean).join(' · ')));
   if(String(S.run)===String(r.id))d.setAttribute('aria-current','true');return d;}
 function lastFailedRun(a){const rs=a.workflowId?D.runs[a.workflowId]:null;return arr(rs).find(r=>r.status==='error'||r.status==='crashed'||r.status==='failed')||null;}
 /* "Try again" needs a run trigger the API doesn't have: the fix key opens the failed run instead (its error and output) */
@@ -487,6 +512,7 @@ V.now=function(m){
 };
 V.crew=function(m){
   if(!need(m,'crew','the crew',4))return;
+  if(S.sess)return sessionDetail(m);
   if(S.agent)return agentDetail(m);
   const desk=isDesk(),cl=MACH.length?ap(h('div','stack'),...MACH.map(machineBlock)):ap(h('div','empty'),h('p','h','No Claude machines.'),h('p',null,'Machines show here once Crew Hub is set up on them.'));
   const ag=agentsBlock(),n=needs().length,al=alertAgents().length;
@@ -497,55 +523,209 @@ V.crew=function(m){
   ap(m,seg,S.crew==='agents'?ag:cl);
 };
 function talk(a){post(API.threads,{kind:'n8n',target:a.id,title:a.name}).then(j=>{const t=j&&(j.thread||j);if(!t||!t.id)throw new ApiError('No thread',0);upsertThread(t);go('chat',{chat:t.id});},e=>failToast('Couldn\'t open the chat',e));}
+/* Talk is lit when nothing else on the screen is; off agents with chat:true still talk (Isaac, 2026-11-18) */
+function talkRow(a,lit){
+  if(a.chat)return ap(h('div','keys'),key('Talk',lit?'lit':'',()=>talk(a)),h('span','dim','Chat with '+short(a.name)+' directly.'));
+  return ap(h('p','nochat'),h('span','sym','○'),ap(h('span'),h('b',null,'Can\'t chat: '),noChatWhy(a)));}
+const runKey=(a,id)=>a.id+'/'+id;
+const RUN_ONE=j=>j&&j.run!==undefined?j.run:j;
+/* agent detail: Latest output + Runs (workflows), Report (services) */
 function agentDetail(m){
   const a=AGENTS.find(x=>x.id===S.agent);if(!a){m.append(ap(h('div','empty'),h('p','h','That agent is gone.'),h('p',null,'n8n no longer reports it.'),key('Back to Crew','',()=>go('crew',{crew:'agents'}))));return;}
   if(S.run)return runDetail(m,a);
-  const st=aState(a),svc=a.kind==='service'||/^svc:/.test(a.id);
+  const st=aState(a),svc=a.kind==='service'||/^svc:/.test(a.id),desk=isDesk();
   m.append(crumb('Crew',()=>go('crew',{crew:'agents'}),a.name));
-  const hd=ap(h('div','row sb'),h('h1','vt',a.name),tag(pipOf(st.c),st.w));
-  m.append(ap(h('div','stack'),hd,h('p','lead',svc?'Service'+(a.version?' · v'+a.version:''):'n8n workflow'+(a.active===false?' · turned off in n8n':''))));
+  m.append(ap(h('div','stack'),ap(h('div','row sb'),h('h1','vt',a.name),tag(pipOf(st.c),st.w)),
+    h('p','lead',[svc?'Service'+(a.version?' v'+a.version:''):'n8n workflow'+(a.active===false?', turned off in n8n':''),a.role&&a.role!=='service'?ROLE[a.role]:null].filter(Boolean).join(' · '))));
   if(hasRuns(a))useSub(D.runs,a.workflowId,API.runs(a.workflowId),RUN_PICK);
-  if(st.c==='warn')m.append(failBanner(a,true));
-  const lr=tm(a.last_run),kv=h('dl','kv');[['State',st.w],['Last run',untracked(a)?'Not tracked':lr?(svc?(a.last_run_ago||ago(lr)):hm(lr)+' · '+ago(lr)):'Never'],['Result',a.last_status||'—'],['Task',a.task||'None'],['ID',a.id]].forEach(([k,v])=>ap(kv,h('dt',null,k),h('dd',null,v)));
-  const pn=ap(h('div','panel'),kv);
-  if(a.chat)pn.append(ap(h('div','keys'),key('Talk','',()=>talk(a)),h('span','dim','Chat with '+short(a.name)+' directly.')));
-  m.append(pn);
-  const desk=isDesk(),rb=gap(h('div','stack'),'0');
-  if(svc){rb.append(grouphd('Output'));const o=useSub(D.output,a.id,API.output(a.id),j=>j&&j.output!==undefined?j.output:j);
-    if(o===undefined)rb.append(ERR[API.output(a.id)]?h('p','dim','No output from this service. '+ERR[API.output(a.id)].message):skel(2));
-    else{const p=gap(h('div','panel'),'8px');if(o&&tm(o.updated))p.append(h('span','num dim','Updated '+hm(tm(o.updated))+' · '+ago(tm(o.updated))));if(o&&o.text)mdBlocks(o.text,p);else p.append(h('p','dim','Nothing written yet.'));rb.append(p);}}
-  else if(!untracked(a)&&!isSys(a)){rb.append(grouphd('Runs'));   // no Runs section for untracked or system workflows
-    if(!hasRuns(a))rb.append(h('p','dim',a.workflowId?'This workflow keeps no successful runs.':'No runs reported.'));
+  const failed=st.c==='warn';if(failed)m.append(failBanner(a,true));
+  const lr=tm(a.last_run),kv=h('dl','kv');[['State',st.w],svc&&!lr?['Report',(()=>{const o=D.output[a.id];return o&&o.updated?updatedWord(tm(o.updated)).replace(/^Updated /,''):o===undefined&&!ERR[API.output(a.id)]?'…':'None';})()]:['Last run',untracked(a)?'Not tracked':lr?(svc?(a.last_run_ago||ago(lr)):whenLong(lr)+' · '+ago(lr)):'Never'],['Result',a.last_status||'—'],['Task',a.task||'None'],['ID',a.id]].forEach(([k,v])=>ap(kv,h('dt',null,k),h('dd',null,v)));
+  m.append(ap(h('div','panel'),kv,talkRow(a,!failed)));
+  const L=gap(h('div','stack'),'0'),R=gap(h('div','stack'),'0');
+  if(svc)reportBlock(a,L);
+  else if(!untracked(a)&&!isSys(a)){   // no Runs section for untracked or system workflows
+    if(!hasRuns(a))L.append(grouphd('Runs'),h('p','dim',a.workflowId?'This workflow keeps no successful runs.':'No runs reported.'));
     else{const rs=D.runs[a.workflowId],e=ERR[API.runs(a.workflowId)];
-      if(rs===undefined)rb.append(e?errState('the runs',e):skel(3));else if(!rs.length)rb.append(h('p','dim','No runs yet.'));
-      else rb.append(ap(h('div','list'),...rs.map(r=>runLi(r,null,()=>go('crew',{agent:a.id,crew:'agents',run:r.id})))));}}
-  const tb=gap(h('div','stack'),'0');tb.append(grouphd('Tickets'));const TK=use('tickets');
-  if(!TK)tb.append(ERR.tickets?h('p','dim','Tickets didn\'t load.'):skel(2));
-  else{const ts=TK.filter(t=>{const x=agentOfTicket(t);return x&&x.id===a.id;});tb.append(ts.length?ap(h('div','list'),...ts.map(ticketLi)):h('p','dim','No tickets for this agent.'));}
-  const nk=ap(h('div','keys'),key('New ticket','',()=>{S.draft={type:'bug',agent:a.id,title:'',details:''};go('tickets',{newT:true});}));nk.style.marginTop='10px';tb.append(nk);
-  m.append(!rb.childNodes.length?tb:desk?ap(h('div','cols two'),rb,tb):ap(h('div','stack'),rb,tb));
+      if(rs===undefined)L.append(grouphd('Latest output'),e?errState('the runs',e):skel(3));
+      else if(!rs.length)L.append(grouphd('Runs'),h('p','dim','No runs yet.'));
+      else{const r0=rs[0],u0=API.run(a.id,r0.id),R0=useSub(D.run,runKey(a,r0.id),u0,RUN_ONE),[pc,w]=runWord(r0);
+        const lo=gap(h('button','panel lo'),'8px');lo.type='button';lo.addEventListener('click',()=>go('crew',{agent:a.id,crew:'agents',run:r0.id}));
+        ap(lo,ap(h('span','row sb'),h('span','plate','Run '+r0.id+' · '+whenLong(tm(r0.startedAt))),tag(pc,w)));
+        if(R0===undefined)lo.append(ERR[u0]?h('span','md clip6','Its summary didn\'t load.'):h('span','skel'));
+        else{const sm=R0.summary||(R0.error?'Stopped with an error'+(R0.lastNode?' at “'+R0.lastNode+'”':'')+'.':null);lo.append(maskInto(h('span','md clip6'),sm||'No summary for this run.'));}
+        lo.append(h('span','open','Open run '+r0.id));
+        L.append(grouphd('Latest output'),lo,grouphd('Runs'),ap(h('div','list'),...rs.map(r=>runLi(r,null,()=>go('crew',{agent:a.id,crew:'agents',run:r.id})))));}}}
+  R.append(grouphd('Tickets'));const TK=use('tickets');
+  if(!TK)R.append(ERR.tickets?h('p','dim','Tickets didn\'t load.'):skel(2));
+  else{const ts=TK.filter(t=>{const x=agentOfTicket(t);return x&&x.id===a.id;});R.append(ts.length?ap(h('div','list'),...ts.map(ticketLi)):h('p','dim','No tickets for this agent.'));}
+  const nk=ap(h('div','keys'),key('New ticket','',()=>{S.draft={type:'bug',agent:a.id,title:'',details:''};go('tickets',{newT:true});}));nk.style.marginTop='10px';R.append(nk);
+  m.append(!L.childNodes.length?R:desk?ap(h('div','cols two'),L,R):ap(h('div','stack'),L,R));
 }
+/* services: agent-output text (markdown shown as is in a monospace well), its time, Refresh (asks n8n again) */
+function reportBlock(a,L){
+  const url=API.output(a.id),o=useSub(D.output,a.id,url,j=>j&&j.output!==undefined?j.output:j),e=ERR[url],busy=S.refreshing===a.id,nm=short(a.name);
+  L.append(grouphd('Report'));
+  const asking=()=>ap(h('span','tag'),pip('busy'),'Asking '+nm+'…');
+  if(o===undefined&&!e){L.append(ap(h('div','row sb rptop'),asking()),skel(3));return;}
+  if(o===undefined){if(e.code==='no_output'||e.status===404){L.append(h('p','dim',nm+' doesn\'t write a report.'));return;}
+    L.append(ap(h('div','errst'),h('span','h num','No report'),h('p',null,'n8n didn\'t send '+nm+'\'s report.'),h('div','well',e.message),key('Try again','',()=>{delete ERR[url];render();})));return;}
+  if(o===null){L.append(h('p','dim',nm+' doesn\'t write a report.'));return;}
+  const up=o&&tm(o.updated);
+  L.append(ap(h('div','row sb rptop'),busy?asking():h('span','num dim',up?updatedWord(up):'No date on this report'),key('Refresh','',()=>refreshOut(a))));
+  if(o&&o.text)L.append(outWell(o.text,24,'rpt:'+a.id,nm+' report'));else L.append(h('p','dim','Nothing written yet.'));}
+function refreshOut(a){if(S.refreshing)return;S.refreshing=a.id;render();
+  get(API.output(a.id)+'?fresh=1').then(j=>{D.output[a.id]=j&&j.output!==undefined?j.output:j;toast('Updated · '+short(a.name));},e=>failToast('Not updated',e)).finally(()=>{S.refreshing=null;render();});}
+/* run view: lamp + word, times, error banner (+ Try again), Summary, What it did, Output */
 function runDetail(m,a){
-  const id=S.run,r=useSub(D.run,id,API.run(id),j=>j&&j.run!==undefined?j.run:j),e=ERR[API.run(id)];
+  const id=S.run,url=API.run(a.id,id),r=useSub(D.run,runKey(a,id),url,RUN_ONE),e=ERR[url],desk=isDesk();
+  if(a.workflowId&&hasRuns(a))useSub(D.runs,a.workflowId,API.runs(a.workflowId),RUN_PICK);
   m.append(crumb(a.name,()=>go('crew',{agent:a.id,crew:'agents'}),'Run '+id));
   if(r===undefined){m.append(h('h1','vt','Run '+id));m.append(e?errState('run '+id,e,['Back to '+short(a.name),()=>go('crew',{agent:a.id,crew:'agents'})]):skel(3));return;}
-  const ok=r.status==='success',bad=r.status==='error'||r.status==='crashed'||r.status==='failed',t0=tm(r.startedAt),t1=tm(r.stoppedAt);
-  m.append(ap(h('div','stack'),ap(h('div','row sb'),h('h1','vt','Run '+(r.id||id)),tag(ok?'run':bad?'warn':'busy',ok?'Done':bad?'Failed':str(r.status||'Running'))),
-    h('p','lead',[a.name,r.mode,t0?hm(t0)+(dayKey(t0)!==dayKey(now())?' '+dmon(t0):''):null,t0&&t1?dur(t1-t0):null].filter(Boolean).join(' · '))));
-  if(r.error){const x=banner('warn','◆','Stopped with an error',r.lastNode?'At “'+r.lastNode+'”.':null);x.lastChild.remove();m.append(x,ap(h('div','well'),h('span',null,str(r.error))));m.lastChild.style.whiteSpace='pre-wrap';}
-  const kv=h('dl','kv');[['Status',str(r.status||'—')],['Started',t0?hm(t0)+' · '+ago(t0):'—'],['Took',t0&&t1?dur(t1-t0):'—'],['Last step',r.lastNode||'—'],['Workflow',r.workflowId||a.workflowId||'—']].forEach(([k,v])=>ap(kv,h('dt',null,k),h('dd',null,v)));
-  m.append(ap(h('div','panel'),kv));
-  const desk=isDesk(),L=h('div','stack'),R=h('div','stack');
-  const sb=gap(ap(h('div','stack'),grouphd('Summary')),'0'),sp=gap(h('div','panel'),'8px');if(r.summary)mdBlocks(r.summary,sp);else sp.append(h('p','dim','No summary for this run.'));sb.append(sp);L.append(sb);
-  const tl=arr(r.tools),tb=gap(ap(h('div','stack'),grouphd('Tools')),'0');
-  if(tl.length){const l=h('div','list');tl.forEach(t=>{const d=h('div','li');ap(d,pip(t.error?'warn':'run'),h('span','t',t.tool||t.name||'tool'),h('span','m',(t.calls!=null?t.calls+'×':'')),h('span'));if(t.error)d.append(h('span','s wrap',str(t.error)));l.append(d);});tb.append(l);}
-  else tb.append(h('p','dim','No tool calls.'));L.append(tb);
-  const ob=gap(ap(h('div','stack'),grouphd('Output')),'0');
-  if(r.output!=null&&str(r.output).trim()&&str(r.output).trim()!=='[]'){const w=h('div','well out');w.setAttribute('tabindex','0');w.setAttribute('aria-label','Run output');w.append(h('span',null,prettyJson(r.output)));ob.append(w);}
-  else ob.append(h('p','dim','No output.'));R.append(ob);
+  const [pc,word]=runWord(r),bad=runBad(r),t0=tm(r.startedAt),t1=tm(r.stoppedAt);
+  m.append(ap(h('div','stack'),ap(h('div','row sb'),h('h1','vt','Run '+(r.id||id)),tag(pc,word)),h('p','lead',[short(a.name),r.mode?modeW(r.mode):null].filter(Boolean).join(' · ')),
+    ap(h('div','meta runmeta'),h('span',null,'Started '+whenLong(t0)),h('span',null,t1?'Took '+dur(t1-t0):t0?'Running for '+dur(now()-t0):''))));
+  if(bad)m.append(runErr(a,r));
+  const L=h('div','stack'),R=h('div','stack');
+  const sp=gap(h('div','panel'),'8px');sp.append(r.summary?maskInto(h('p','md'),r.summary):h('p','dim',bad?'No summary: the run stopped first.':'No summary for this run.'));
+  L.append(gap(ap(h('div','stack'),grouphd('Summary'),sp),'0'));
+  const tp=gap(h('div','panel'),'6px'),tl=arr(r.tools);
+  if(tl.length){const l=h('div','steps');tl.forEach(t=>{const er=t.error,ln=h('div','stp');ap(ln,pip(er?'warn':'done'),h('span','n',t.tool||t.name||'Tool'),h('span','c',t.calls!=null?t.calls+(+t.calls===1?' call':' calls'):''));
+    if(er)ln.append(h('span','why',er===true?'Failed':'Failed: '+str(er)));l.append(ln);});tp.append(l);}
+  else tp.append(h('p','dim','No tools used in this run.'));
+  if(r.lastNode)tp.append(ap(h('p','lastn'),h('span','plate',bad?'Stopped at':'Last step'),h('span',null,r.lastNode)));
+  L.append(gap(ap(h('div','stack'),grouphd('What it did'),tp),'0'));
+  const ob=gap(ap(h('div','stack'),grouphd('Output')),'0'),out=str(r.output).trim();
+  if(out&&!['[]','{}','null','""'].includes(out))ob.append(outWell(prettyJson(r.output),12,'out:'+id,'Output of run '+id));
+  else ob.append(ap(h('div','panel'),h('p','dim',bad?'No output: the run stopped before its last step.':'The last step'+(r.lastNode?', '+r.lastNode+',':'')+' returned nothing.')));
+  R.append(ob);
   m.append(desk?ap(h('div','cols two'),L,R):ap(h('div','stack'),L,R));
 }
+function runErr(a,r){
+  const rs=a.workflowId?arr(D.runs[a.workflowId]):[],newer=rs.filter(x=>tm(x.startedAt)>tm(r.startedAt)),ok=newer.find(x=>x.status==='success');
+  let keys=null,note=null;
+  if(ok)note='A later run worked: Run '+ok.id+', '+whenLong(tm(ok.startedAt))+'.';
+  else if(a.canRerun&&!newer.length){const k=key('Try again','fix');k.addEventListener('click',()=>rerunDlg(a,k));keys=ap(h('div','keys'),k);}
+  else if(!a.canRerun)note=r.mode==='webhook'?'It runs when someone asks it something, so there\'s nothing to run again here. Ask again in Chat.':'This workflow can\'t be run again from the Bridge.';
+  const box=gap(h('div','stack'),'8px');
+  box.append(banner('warn','◆','Run '+r.id+' failed',r.lastNode?'Stopped at “'+r.lastNode+'”.':'Stopped with an error.',keys));
+  if(r.error){const w=gap(ap(h('div','well'),h('span','plate','Error from n8n')),'4px');w.style.display='grid';w.append(maskInto(h('span','outw'),r.error));box.append(w);}
+  if(note)box.append(h('p','dim',note));
+  return box;}
+function rerunDlg(a,back){
+  guarded({title:'Run again',q:(a.rerunHint||'Runs '+short(a.name)+' again now.')+' Its result shows here as a new run.',
+    checks:[{t:'n8n is answering',v:(health().n8n||{}).ok===false?'nogo':'go'},{t:'Not running right now',v:a.task?'nogo':'go'},{t:'Sends your phone a notification again',v:'caut',word:'PHONE'}],
+    act:'Run again',cancel:'Not now',back,
+    go:()=>post(API.rerun,{agentId:a.id,confirm:true}).then(()=>{patchAgent(a.id,{state:'ok',task:'Running again (from the Bridge)'});delete D.runs[a.workflowId];toast('Started · '+short(a.name));go('crew',{agent:a.id,crew:'agents'});},e=>failToast('Not started',e))});}
 function prettyJson(s){s=str(s);try{const v=JSON.parse(s);return JSON.stringify(v,null,2);}catch(e){return s;}}
+
+/* ---------- Claude conversations (docs/BRIDGE.md §13): read from the machine while open, never stored here ----------
+   The server asks the machine (crew_hub/transcript) and keeps the answer in memory for 60 s at most. While a conversation
+   is on screen the page asks for newer turns every 3 s (after=cursor) and stops when it goes away (then tells the server
+   to forget it). Steps are counts per assistant turn ("Read 3 files · Ran 2 commands"), never tool inputs. */
+const CONV={},CONVL={};let convOpen=null,convSeen=null,convPolling=false;
+const STEP_ORDER=['read','search','edit','write','run','web','agent','other'];
+const STEPW={read:['Read','a file','files'],search:['Ran','a search','searches'],edit:['Edited','a file','files'],write:['Wrote','a file','files'],
+  run:['Ran','a command','commands'],web:['Checked','a web page','web pages'],agent:['Started','an agent','agents'],other:['Took','another step','other steps']};
+const stepWords=st=>STEP_ORDER.filter(k=>st&&+st[k]>0).map(k=>{const w=STEPW[k],n=+st[k];return w[0]+' '+(n===1?w[1]:n+' '+w[2]);}).join(' · ');
+const CONV_ERR={offline:'The machine is offline.',no_transcript:'This session can\'t send its conversation. Update Crew Hub on its machine.',
+  crew_disconnected:'The Bridge isn\'t connected to Home Assistant.',crew_timeout:'Home Assistant didn\'t answer in time.',no_ack:'The machine didn\'t answer.',
+  bad_seal:'The machine\'s answer didn\'t check out, so it isn\'t shown.',too_large:'The conversation was too large to send.',not_configured:'Commands aren\'t set up for this machine in Crew Hub.',
+  not_admin:'Only admins can read Claude conversations.',unknown_session:'That session is gone.'};
+const convErr=e=>CONV_ERR[e&&e.code]||CONV_ERR[str(e&&e.code).replace(/^crew_/,'')]||(e&&e.message)||'error';
+const mname=s=>(s.m&&s.m.machine&&s.m.machine.name)||s.mk;
+/* why a session isn't a two-way chat (null when it is): ended, commands off, no send, or no transcript (an older Crew Hub) */
+function sessChatWhy(s){const mn=mname(s);if(s.status==='ended')return'this session has ended.';
+  if(!(s.m.machine.commands&&s.m.machine.commands.enabled))return'commands are off for '+mn+'. Turn them on in Crew Hub.';
+  if(!can(s,'send'))return'this session can\'t take messages.';if(!can(s,'transcript'))return'update Crew Hub on '+mn+' to read its conversation here.';return null;}
+const chatOk=s=>!sessChatWhy(s);
+/* new machine turns join the list; a Bridge message the machine now reports replaces the local "Sending…" copy */
+function mergeTurns(C,turns){const seen=new Set(arr(C.turns).map(t=>t.id)),loc=arr(C.turns).filter(t=>t.local),base=arr(C.turns).filter(t=>!t.local);
+  arr(turns).forEach(t=>{if(seen.has(t.id))return;seen.add(t.id);
+    if(t.k==='user'&&t.via==='bridge'){const i=loc.findIndex(x=>x.state!=='failed'&&str(x.text).trim()===str(t.text).trim());if(i>=0){t.state='delivered';loc.splice(i,1);}}
+    base.push(t);});
+  C.turns=base.concat(loc);}
+function convOf(mk,id,fresh){const k=mk+'/'+id;convSeen={k,mk,id};if(!fresh&&(CONV[k]!==undefined||CONVL[k]))return CONV[k];CONVL[k]=true;
+  get(API.conv(mk,id,{fresh})).then(j=>{const old=CONV[k],C=Object.assign({},j,{turns:arr(old&&old.turns).filter(t=>t.local)});mergeTurns(C,j&&j.turns);CONV[k]=C;},e=>{CONV[k]={error:e};})
+    .finally(()=>{CONVL[k]=false;schedule();});return CONV[k];}
+function convPoll(){const o=convOpen;if(!o||convPolling||document.hidden||CONVL[o.k])return;const C=CONV[o.k];if(!C||C.error||C.gone||!C.cursor)return;
+  convPolling=true;
+  get(API.conv(o.mk,o.id,{after:C.cursor})).then(j=>{if(CONV[o.k]!==C)return;if(j&&j.gone){C.gone=true;C.reason=j.reason;schedule();return;}
+    if(j&&j.cursor)C.cursor=j.cursor;const n=arr(j&&j.turns);if(!n.length)return;const atB=nearBottom();mergeTurns(C,n);render();if(atB)toBottom();},()=>{})
+    .finally(()=>{convPolling=false;});}
+setInterval(convPoll,3000);
+/* after each render: a conversation that is no longer on screen is forgotten here and on the server */
+function convAfterRender(){const was=convOpen,now_=convSeen;convSeen=null;convOpen=now_;
+  if(was&&(!now_||now_.k!==was.k)){delete CONV[was.k];delete CONVL[was.k];post(API.convClose(was.mk,was.id),{}).catch(()=>{});}}
+
+/* Claude session page: the Crew panel, then the conversation (desktop: side by side) */
+function sessionDetail(m){
+  const s=SESS.find(x=>x.mk===S.sess.mk&&x.id===S.sess.id);
+  if(!s){m.append(ap(h('div','empty'),h('p','h','That session is gone.'),h('p',null,'Crew Hub no longer reports it.'),key('Back to Crew','',()=>go('crew',{crew:'claude'}))));return;}
+  const on=s.m.status==='online',mn=mname(s);
+  m.append(crumb('Crew',()=>go('crew',{crew:'claude'}),s.name));
+  m.append(ap(h('div','stack'),ap(h('div','row sb'),h('h1','vt',s.name),stateTag(s)),h('p','lead',[mn,modelName(s.model),s.effort].filter(Boolean).join(' · '))));
+  const sp=sessPanel(s),sh=sp.querySelector('.sh'),spn=sp.querySelector('.spine');if(sh)sh.remove();if(spn)spn.replaceWith(agentsList(s));   // same panel as Crew: summary, ask, plan, agents, meta, More
+  const cv=convBlock(s,on,mn);
+  if(isDesk())m.append(ap(h('div','cols sessd'),sp,cv));else ap(m,sp,cv);
+}
+function agentReport(s,a){const C=CONV[s.mk+'/'+s.id],t=C&&arr(C.turns).find(x=>x.k==='report'&&x.agentId===a.id);return t?t.text:(a.status!=='running'&&a.summary)||null;}
+function agentsList(s){
+  const T=a=>tm(a.endedAt||a.startedAt)||0,sp=h('div','spine');
+  arr(s.agents).slice().sort((x,y)=>(x.status==='running'?0:1)-(y.status==='running'?0:1)||T(y)-T(x)).forEach(a=>{
+    const k='ag:'+s.id+':'+a.id,open=!!S.open[k],st=a.status,pc=st==='running'?'busy':st==='done'?'done':st==='failed'?'warn':'';
+    const when=st==='running'?span(now()-tm(a.startedAt)):(st==='done'?'Done ':st==='failed'?'Failed ':'Stopped ')+hm(tm(a.endedAt));
+    const b=h('button','ag');b.type='button';b.setAttribute('aria-expanded',open);
+    ap(b,pip(pc),ap(h('span','agt'),h('span','agn',a.title),h('span','age',when)));
+    b.append(st==='running'&&a.current?h('span','step',a.current.text):h('span','agl rep-l',open?'Hide report':'Final report'));
+    b.addEventListener('click',()=>{S.open[k]=!open;render();});sp.append(b);
+    if(open){const x=h('div','agx'),rep=agentReport(s,a);
+      if(rep)x.append(gap(ap(h('div','well'),h('span','plate','Final report · '+short(a.title)),maskInto(h('p','md'),rep)),'6px'));
+      else x.append(h('p','dim',st==='running'?'Still working. Its final report shows here when it\'s done.':'No final report.'));
+      if(chatOk(s)){x.append(ap(h('p','dim tal'),'To talk to this agent, message its session.'),ap(h('div','keys'),lnk('Message '+s.name,()=>focusComposer(s))));x.lastChild.style.margin='-8px 0 0 -6px';}
+      sp.append(x);}});
+  return sp;}
+function focusComposer(s){const ta=main.querySelector('[data-k="cm:'+s.mk+'/'+s.id+'"]');if(ta&&!ta.disabled){ta.focus({preventScroll:true});ta.scrollIntoView({block:'center'});}}
+function turnEls(s,t,c,retry){const mn=mname(s),at=tm(t.at);
+  if(t.k==='user'){c.append(maskInto(h('div','u'),t.text));const by=h('span','by'+(t.state==='failed'?' bad':''),['You',at?hm(at):null,t.via==='bridge'?'from the Bridge':'on '+mn,t.state==='sending'?'Sending…':t.state==='delivered'?'Delivered':t.state==='failed'?'Not delivered: '+(t.err||'no answer'):null].filter(Boolean).join(' · '));c.append(by);
+    if(t.state==='failed'&&retry){const b=lnk('Try again',retry);b.style.justifySelf='end';c.append(b);}return;}
+  if(t.k==='assistant'){const a=h('div','a');a.append(ap(h('span','who',s.name),h('span','num',at?hm(at):'')));str(t.text).split(/\n{2,}/).forEach(p=>{if(p.trim())a.append(maskInto(h('p','md'),p));});c.append(a);
+    const sw=stepWords(t.steps);if(sw)c.append(ap(h('div','stepl'),ap(h('span','tool'),pip('done'),h('span',null,sw))));return;}
+  if(t.k==='report'){c.append(gap(ap(h('div','well rep'),ap(h('span','row sb'),h('span','plate','Agent report'+(t.title?' · '+short(t.title):'')),h('span','plate',at?hm(at):'')),maskInto(h('p','md'),t.text)),'6px'));}}
+function workingLine(s){const a=arr(s.agents).find(x=>x.status==='running');return ap(h('div','stepl'),ap(h('span','tool busy'),pip('busy'),h('span',null,'Working…'+(a&&a.title?' · '+a.title:''))));}
+/* fetch line + turns; extra = stored or local turns still on their way (chat thread) */
+function convBody(s,mn,extra){
+  const k=s.mk+'/'+s.id,C=convOf(s.mk,s.id),busy=CONVL[k],out=[],c=h('div','convo');c.setAttribute('aria-live','polite');
+  const nt=h('div','fetchln');
+  nt.append(busy||C===undefined?ap(h('span','tag'),pip('busy'),'Asking '+mn+'…'):h('span',null,'Fetched from '+mn+' when you opened this; not stored.'),lnk('Refresh',()=>{convOf(s.mk,s.id,true);render();}));
+  out.push(nt);
+  if(C===undefined)c.append(skel(3));
+  else if(C.error)c.append(ap(h('div','errst'),h('span','h num','Couldn\'t get the conversation'),h('p',null,mn+' didn\'t send it.'),h('div','well',convErr(C.error)),key('Try again','',()=>{convOf(s.mk,s.id,true);render();})));
+  else if(C.gone)c.append(ap(h('div','empty'),h('p','h','Older turns aren\'t kept here.'),h('p',null,mn+' no longer has this session\'s conversation.'+(s.status==='ended'?' It ended '+whenLong(tm(s.updatedAt))+'; its last summary is above.':''))));
+  else{const T=arr(C.turns),X=extra?extra(T):[];if(C.cut)c.append(h('p','st','Older turns aren\'t kept here.'));T.concat(X).forEach(t=>turnEls(s,t,c,t.retry));
+    if(!T.length&&!X.length)c.append(h('p','st','Nothing said yet in this session.'));
+    if(s.status==='working')c.append(workingLine(s));}
+  out.push(c);return out;}
+function convBlock(s,on,mn){
+  const box=gap(h('div','stack conv'),'0');box.append(grouphd('Conversation'));
+  const why=sessChatWhy(s);
+  if(why&&!can(s,'transcript')){box.append(ap(h('p','nochat'),h('span','sym','○'),ap(h('span'),h('b',null,'Can\'t chat: '),why)));return box;}
+  if(!on){const seen=hm(tm(s.m.machine.updatedAt||s.m.updatedAt));
+    box.append(ap(h('div','oneway offbox'),ap(h('span','tag'),pip('offline'),mn+' is offline · last seen '+seen),h('p',null,'The conversation comes straight from '+mn+', so it shows again when '+mn+' is back. Nothing is kept here.')));
+    box.append(sessComposer(s,false,mn,mn+' can\'t take messages while it\'s offline.'));return box;}
+  ap(box,...convBody(s,mn));
+  if(s.status==='ended')box.append(h('p','oneway','This session has ended, so it can\'t take messages.'));
+  else if(why)box.append(ap(h('p','nochat'),h('span','sym','○'),ap(h('span'),h('b',null,'Can\'t chat: '),why)));
+  else box.append(sessComposer(s,true,mn,'Goes to '+mn+' as a message from you. Replies show here while this is open.'));
+  return box;}
+function sessComposer(s,ok,mn,note){
+  const k=s.mk+'/'+s.id,dk='cm:'+k,cp=h('div','composer'),pn=h('div','panel'),ta=h('textarea');ta.rows=2;ta.maxLength=4000;ta.placeholder='Message '+s.name;ta.setAttribute('aria-label','Message '+s.name);bindDraft(ta,dk);ta.disabled=!ok;
+  const ck=h('label','chk'),cb=h('input');cb.type='checkbox';cb.disabled=!ok;ap(ck,cb,'Urgent: interrupt the current step');
+  const send=()=>{const v=str(S.drafts[dk]).trim();if(!v||!ok)return;const urgent=cb.checked;delete S.drafts[dk];ta.value='';
+    const C=CONV[k],t={id:'u'+uuid(),k:'user',at:now(),text:v,via:'bridge',state:'sending',local:true};if(C&&C.turns)C.turns.push(t);render();toBottom();
+    command(s.mk,'send',{session:s.id,text:v,urgent}).then(()=>{if(t.state==='sending')t.state='delivered';render();},e=>{t.state='failed';t.err=e.message;render();});};
+  ta.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing){e.preventDefault();send();}});
+  const sk=key('Send',ok?'lit':'',send);sk.disabled=!ok;
+  ap(pn,ta,ap(h('div','row sb'),s.status==='working'&&ok?ck:h('span'),sk));cp.append(pn,h('p','cnote',note));return cp;}
 
 /* ---------- chat: threads persisted on the server (kept 90 days); n8n replies arrive over SSE ---------- */
 const mT=m=>tm(m.created_at!=null?m.created_at:m.createdAt);
@@ -565,9 +745,10 @@ function loadMsgs(id,before){const url=API.messages(id,before);if(LOADING[url])r
     e=>{ERR[url]=e;}).finally(()=>{LOADING[url]=false;schedule();});}
 const isClaude=t=>t&&t.kind==='claude';
 function threadName(t){if(!t)return'Agent Hub';const tn=t.targetName||t.target_name;if(isClaude(t))return tn||t.title||'Claude';if(!t.target||t.target==='crew')return'Agent Hub';const a=AGENTS.find(x=>x.id===t.target);return a?a.name:(tn||t.target);}
-function threadTitle(t){return t.title||(isClaude(t)?threadName(t):t.target&&t.target!=='crew'?threadName(t):'New chat');}
+const directOf=t=>t&&t.kind==='n8n'&&t.target&&t.target!=='crew'?AGENTS.find(x=>x.id===t.target)||null:null;
+function threadTitle(t){if(t&&t.kind==='n8n'&&t.target&&t.target!=='crew')return threadName(t);return t.title||(isClaude(t)?threadName(t):'New chat');}   // a direct thread is titled with its agent
 function threadBusy(t){const L=D.msgs[t.id];if(L&&L.length){const u=[...L].reverse().find(x=>x.role==='user');return !!(u&&INFLIGHT.includes(u.state))&&!isClaude(t);}return !isClaude(t)&&!!(t.last&&t.last.role==='user'&&INFLIGHT.includes(t.last.state))||!!t.busy;}
-function threadSub(t){if(threadBusy(t))return'Thinking…';const l=t.last||{};const tx=str(l.text||t.last_text||t.lastText).replace(/\s+/g,' ');if(!tx)return isClaude(t)?'Message only':'No messages yet';return(l.role==='user'?'You: ':'')+tx;}
+function threadSub(t){if(threadBusy(t))return'Thinking…';const l=t.last||{};const tx=str(l.text||t.last_text||t.lastText).replace(/\s+/g,' ');if(!tx)return isClaude(t)?'Claude session':'No messages yet';return(l.role==='user'?'You: ':'')+tx;}
 /* the page scrolls as a whole (inside HA's ingress iframe too): live updates keep its position, see render() */
 const scroller=()=>document.scrollingElement||document.documentElement;
 function nearBottom(px){const se=scroller();return se.scrollTop+innerHeight>=se.scrollHeight-(px==null?80:px);}
@@ -582,11 +763,18 @@ function markRead(t){if(!t)return;const L=D.msgs[t.id];const last=L&&L.length?mT
 function chatList(){
   const L=h('div','clist'),srch=h('div','search'),inp=h('input','inp');inp.type='search';inp.placeholder='Search chats';inp.setAttribute('aria-label','Search chats');bindDraft(inp,'chatsearch');srch.append(inp);
   L.append(ap(h('div','row sb'),plate('Chats'),key('New chat','',()=>go('chat',{chat:'new'}))),srch);
-  const TH=arr(D.threads).filter(t=>!t.archived).slice().sort((a,b)=>tWhen(b)-tWhen(a));
-  if(!TH.length){L.append(h('p','dim','No chats yet. Ask the crew something, or open an agent\'s Talk.'));return L;}
-  const groups={},order=[];TH.forEach(t=>{const g=isClaude(t)?'Claude · message only':dayName(tWhen(t)||now());if(!groups[g]){groups[g]=[];order.push(g);}groups[g].push(t);});
-  order.sort((a,b)=>(a.startsWith('Claude')?1:0)-(b.startsWith('Claude')?1:0)).forEach(g=>{const box=gap(h('div','stack'),'2px');box.append(h('div','grouphd',g));
-    groups[g].forEach(t=>{const b=h('button','cl');b.type='button';b.dataset.title=(threadTitle(t)+' '+threadName(t)).toLowerCase();ap(b,h('span','t',threadTitle(t)),countBox(+t.unread||0,false,'unread'),h('span','s',threadSub(t)));if(S.chat===t.id)b.setAttribute('aria-current','true');b.addEventListener('click',()=>go('chat',{chat:t.id}));box.append(b);});L.append(box);});
+  const all=arr(D.threads).filter(t=>!t.archived).slice().sort((a,b)=>tWhen(b)-tWhen(a)),TH=all.filter(t=>!isClaude(t));
+  /* Claude: two-way sessions only (send + transcript, commands on, not ended); a row without a thread opens one */
+  const CS=SESS.filter(chatOk).sort((a,b)=>(tm(b.updatedAt)||0)-(tm(a.updatedAt)||0)),known=new Set(CS.map(s=>s.mk+'/'+s.id));
+  const CT=all.filter(t=>isClaude(t)&&!known.has(t.target)&&!MACH.length);   // crew not loaded yet: keep the threads the server listed
+  if(!TH.length&&!CS.length&&!CT.length){L.append(h('p','dim','No chats yet. Ask the crew something, or open an agent\'s Talk.'));return L;}
+  const row=(title,sub,unread,cur,fn)=>{const b=h('button','cl');b.type='button';b.dataset.title=title.toLowerCase();ap(b,h('span','t',title),countBox(unread||0,false,'unread'),h('span','s',sub));if(cur)b.setAttribute('aria-current','true');b.addEventListener('click',fn);return b;};
+  const groups={},order=[];TH.forEach(t=>{const g=dayName(tWhen(t)||now());if(!groups[g]){groups[g]=[];order.push(g);}groups[g].push(t);});
+  order.forEach(g=>{const box=gap(h('div','stack'),'2px');box.append(h('div','grouphd',g));
+    groups[g].forEach(t=>{const b=row(threadTitle(t)+' '+threadName(t),threadSub(t),+t.unread,S.chat===t.id,()=>go('chat',{chat:t.id}));b.firstChild.textContent=threadTitle(t);box.append(b);});L.append(box);});
+  if(CS.length||CT.length){const box=gap(h('div','stack'),'2px');box.append(h('div','grouphd','Claude'));
+    CS.forEach(s=>{const t=all.find(x=>isClaude(x)&&x.target===s.mk+'/'+s.id);const b=row(s.name+' '+mname(s),claudeSub(s,t),t&&+t.unread,t&&S.chat===t.id,()=>openClaude(s));b.firstChild.textContent=s.name;box.append(b);});
+    CT.forEach(t=>{const b=row(threadTitle(t),threadSub(t),+t.unread,S.chat===t.id,()=>go('chat',{chat:t.id}));box.append(b);});L.append(box);}
   const filt=()=>{const q=inp.value.trim().toLowerCase();L.querySelectorAll('.cl').forEach(b=>{b.hidden=!!q&&!b.dataset.title.includes(q);});};inp.addEventListener('input',filt);filt();
   return L;}
 function msgEl(t,mm){
@@ -597,7 +785,8 @@ function msgEl(t,mm){
 const FAILTXT={timeout:['No reply after 2 min',n=>n+' didn\'t answer. Your message is saved here.'],unknown:['No reply',()=>'The Bridge restarted while waiting. The agent may have acted, so check before trying again.'],
   dropped:['Not sent',()=>'It waited over 10 min behind another message.'],failed:['Not sent',(n,e)=>e?str(e):n+' couldn\'t take it. Your message is saved here.']};
 function chatThread(t,id){
-  const V_=h('div','cview'),top=h('div','ctop'),cl=isClaude(t);ap(top,h('h1','vt',t?threadTitle(t):'New chat'),plate(cl?'Claude · message only':threadName(t)));V_.append(top);
+  if(isClaude(t))return claudeThread(t);
+  const V_=h('div','cview'),top=h('div','ctop'),cl=false,dA=directOf(t);ap(top,h('h1','vt',t?threadTitle(t):'New chat'),dA?ap(h('span','keys'),roleTag(dA),plate('Direct')):plate(threadName(t)));V_.append(top);
   const c=h('div','convo');c.setAttribute('aria-live','polite');let fail=null;
   const L=id?D.msgs[id]:[];if(id&&L===undefined&&!ERR[API.messages(id)])loadMsgs(id);
   if(id&&ERR[API.messages(id)]&&L===undefined)c.append(errState('this chat',ERR[API.messages(id)]));
@@ -607,7 +796,6 @@ function chatThread(t,id){
     let lastDay=null;L.forEach(mm=>{const d=dayKey(mT(mm)||now());if(d!==lastDay){c.append(plate(dayName(mT(mm)||now()),'day'));lastDay=d;}c.append(msgEl(t,mm));});
     const lastU=[...L].reverse().find(x=>x.role==='user'),lastA=[...L].reverse().find(x=>x.role==='agent');
     const answered=lastU&&lastA&&(+lastA.id>+lastU.id||mT(lastA)>mT(lastU));
-    if(cl)c.append(ap(h('p','oneway',threadName(t)+' reads this as a message. Its replies and questions show in Crew. '),lnk('Open in Crew',()=>go('crew',{crew:'claude'}))));
     if(lastU&&FAILED.includes(lastU.state)&&!answered){fail=lastU;const ft=FAILTXT[lastU.state]||FAILTXT.failed;const nm=threadName(t);
       c.append(banner('warn','◆',cl&&lastU.state==='failed'?'Not delivered':ft[0],cl?(CMD_ERR[lastU.error]||str(lastU.error||'The machine didn\'t take it.')):ft[1](nm,lastU.error),
         ap(h('div','keys'),key('Try again','fix',()=>post(API.retry(id,lastU.id),{}).then(j=>{if(j&&(j.message||j.id))upsertMsg(j.message||j);S.stick=true;render();},e=>failToast('Not sent',e))),lnk('All chats',()=>go('chat',{chat:'list'})))));}
@@ -615,7 +803,7 @@ function chatThread(t,id){
       const q=lastU.state==='queued'&&L.some(x=>x!==lastU&&x.role==='user'&&x.state==='sending');
       const tl=ap(h('div','a'),ap(h('span','who',threadName(t))),ap(h('span','tool busy'),pip('busy'),ap(h('span',null,q?'Queued… ':'Thinking… '),h('span','num',Math.floor(el/60)+':'+p2(el%60)))),h('p','dim','Replies take 10–60 s, sometimes 2 min. You can close the Bridge; the reply waits here.'));
       tl.querySelector('.tool .num').id='think-el';c.append(tl);}
-    else if(!L.length&&!cl)c.append(ap(h('div','empty'),h('p','h',t&&t.target&&t.target!=='crew'?'Ask '+short(threadName(t))+' anything.':'Ask the crew anything.'),h('p',null,(t&&t.target&&t.target!=='crew'?short(threadName(t)):'Agent Hub')+' can read the agents\' state, file tickets and start runs. Replies take up to a minute.')));
+    else if(!L.length&&!cl)c.append(ap(h('div','empty'),h('p','h',t&&t.target&&t.target!=='crew'?'Ask '+short(threadName(t))+' anything.':'Ask the crew anything.'),h('p',null,dA?short(threadName(t))+' answers from its own data, in its own words. Replies take up to a minute.':'Agent Hub can read the agents\' state, file tickets and start runs. Replies take up to a minute.')));
   }
   V_.append(c);
   const dk='chat:'+(id||'new'),cp=h('div','composer'),pn=h('div','panel'),ta=h('textarea');ta.rows=2;ta.maxLength=4000;ta.placeholder='Message '+(cl?threadName(t):t&&t.target&&t.target!=='crew'?short(threadName(t)):'the crew');ta.setAttribute('aria-label','Message');bindDraft(ta,dk);
@@ -623,11 +811,42 @@ function chatThread(t,id){
   ta.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing){e.preventDefault();send();}});
   ap(pn,ta,ap(h('div','row sb'),h('span','dim desk-only','Enter sends · Shift+Enter for a new line'),h('span','phone-only'),key('Send',fail?'':'lit',send)));
   cp.append(pn,h('p','cnote','Chats are kept on the Bridge for 90 days, so closing it loses nothing.'));V_.append(cp);return V_;}
-async function sendChat(t,id,text){
+/* Claude threads in Chat are pointers (machine/session): the conversation comes from the machine while the thread is
+   open; only what you send is stored (and shown here until the machine reports it). */
+const sessOf=t=>{const p=str(t&&t.target).split('/'),mk=p[0],id=p.slice(1).join('/');return SESS.find(x=>x.mk===mk&&x.id===id)||null;};
+const sessWord=s=>s.m.status!=='online'?'Offline':openAsk(s)?'Needs you':s.status==='working'?'Working':s.status==='ended'?'Ended':'Idle';
+function claudeSub(s,t){const l=(t&&t.last)||{},tx=str(l.text||(t&&(t.last_text||t.lastText))).replace(/\s+/g,' ');if(tx&&l.role==='user')return'You: '+tx;return mname(s)+' · '+sessWord(s);}
+function openClaude(s){const target=s.mk+'/'+s.id,t=arr(D.threads).find(x=>isClaude(x)&&x.target===target&&!x.archived);if(t)return go('chat',{chat:t.id});
+  post(API.threads,{kind:'claude',target}).then(j=>{const nt=j&&(j.thread||j);if(!nt||!nt.id)throw new ApiError('No thread',0);upsertThread(nt);go('chat',{chat:nt.id});},e=>failToast('Couldn\'t open the chat',e));}
+function storedPending(t,T){const L=D.msgs[t.id];if(L===undefined&&!ERR[API.messages(t.id)])loadMsgs(t.id);
+  const sent=T.filter(x=>x.k==='user'&&x.via==='bridge'),lastAt=T.reduce((a,x)=>Math.max(a,tm(x.at)||0),0),out=[];
+  arr(L).filter(m=>m.role==='user').forEach(m=>{const i=sent.findIndex(x=>str(x.text).trim()===str(m.text).trim());if(i>=0){if(m.state==='delivered')sent[i].state='delivered';sent.splice(i,1);return;}
+    const st=INFLIGHT.includes(m.state)?'sending':FAILED.includes(m.state)?'failed':m.state==='delivered'?'delivered':null,at=mT(m)||0;if(!st)return;
+    if(st==='delivered'&&at<=lastAt)return;if(st==='failed'&&at<=lastAt&&now()-at>10*MIN)return;
+    out.push({id:'m'+m.id,k:'user',at,text:m.text,via:'bridge',state:st,err:st==='failed'?(CMD_ERR[m.error]||str(m.error||'')||null):null,
+      retry:st==='failed'&&m.id!=null&&!String(m.id).startsWith('tmp-')?()=>post(API.retry(t.id,m.id),{}).then(j=>{if(j&&(j.message||j.id))upsertMsg(j.message||j);render();},e=>failToast('Not sent',e)):null});});
+  return out;}
+function claudeThread(t){
+  const s=sessOf(t),mn=s?mname(s):str(t.target).split('/')[0],V_=h('div','cview'),top=h('div','ctop');
+  ap(top,h('h1','vt',threadTitle(t)),plate('Claude · '+mn));V_.append(top);
+  const ok=!!s&&s.m.status==='online'&&chatOk(s);
+  if(!s){V_.append(ap(h('div','convo'),ap(h('div','empty'),h('p','h','That session is gone.'),h('p',null,'Crew Hub no longer reports it, so there\'s nothing to read or send.'))));return V_;}
+  if(s.m.status!=='online')V_.append(ap(h('div','convo'),ap(h('div','oneway offbox'),ap(h('span','tag'),pip('offline'),mn+' is offline · last seen '+hm(tm(s.m.machine.updatedAt||s.m.updatedAt))),h('p',null,'The conversation comes straight from '+mn+', so it shows again when '+mn+' is back. Nothing is kept here.'))));
+  else if(!chatOk(s)&&!can(s,'transcript')){V_.append(ap(h('p','nochat'),h('span','sym','○'),ap(h('span'),h('b',null,'Can\'t chat: '),sessChatWhy(s))));return V_;}
+  else{const [nt,c]=convBody(s,mn,T=>storedPending(t,T));c.prepend(nt);V_.append(c);}   // the chat view is ctop / convo / composer
+  if(s.status==='ended'){V_.append(h('p','oneway','This session has ended, so it can\'t take messages.'));return V_;}
+  const dk='chat:'+t.id,cp=h('div','composer'),pn=h('div','panel'),ta=h('textarea');ta.rows=2;ta.maxLength=4000;ta.placeholder='Message '+s.name;ta.setAttribute('aria-label','Message '+s.name);bindDraft(ta,dk);ta.disabled=!ok;
+  const ck=h('label','chk'),cb=h('input');cb.type='checkbox';cb.disabled=!ok;ap(ck,cb,'Urgent: interrupt the current step');
+  const send=()=>{const v=str(S.drafts[dk]).trim();if(!v||!ok)return;const urgent=cb.checked;delete S.drafts[dk];ta.value='';sendChat(t,t.id,v,{urgent}).catch(e=>{S.drafts[dk]=v;failToast('Not sent',e);render();});};
+  ta.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing){e.preventDefault();send();}});
+  const sk=key('Send',ok?'lit':'',send);sk.disabled=!ok;
+  ap(pn,ta,ap(h('div','row sb'),s.status==='working'&&ok?ck:h('span'),sk));
+  cp.append(pn,h('p','cnote',ok?'Goes to '+mn+' as a message from you. Replies show here while this is open.':mn+' can\'t take messages while it\'s offline.'));V_.append(cp);return V_;}
+async function sendChat(t,id,text,opt){
   if(!id){const j=await post(API.threads,{kind:'n8n',target:'crew',new:true});const nt=j&&(j.thread||j);if(!nt||!nt.id)throw new ApiError('No thread',0);upsertThread(nt);D.msgs[nt.id]=[];id=nt.id;t=nt;S.chat=id;history.replaceState(null,'','#'+route());}
   const cid=uuid(),tmp={id:'tmp-'+cid,threadId:id,role:'user',text,state:'queued',clientId:cid,createdAt:now()};
   if(!D.msgs[id])D.msgs[id]=[];upsertMsg(tmp);S.stick=true;render();
-  try{const j=await post(API.send(id),{text,clientId:cid});const m=j&&(j.message||j);if(m&&m.id!=null){const L=D.msgs[id];const i=L.findIndex(x=>x.id===tmp.id);if(i>=0)L.splice(i,1);upsertMsg(Object.assign({threadId:id},m));}
+  try{const j=await post(API.send(id),Object.assign({text,clientId:cid},opt&&opt.urgent?{urgent:true}:{}));const m=j&&(j.message||j);if(m&&m.id!=null){const L=D.msgs[id];const i=L.findIndex(x=>x.id===tmp.id);if(i>=0)L.splice(i,1);upsertMsg(Object.assign({threadId:id},m));}
     toast(isClaude(t)?'Sent · '+threadName(t):'Sent');render();}
   catch(e){const L=D.msgs[id]||[];const i=L.findIndex(x=>x.id===tmp.id);if(i>=0)L.splice(i,1);throw e;}}
 V.chat=function(m){
@@ -895,7 +1114,7 @@ function render(nav){
     else if(grew&&atBot){toBottom();S.newReply=null;}
     else{if(se.scrollTop!==sy)se.scrollTop=sy;if(grew&&mk1.last!==mk0.last&&mk1.role!=='user'&&mk0.n>0)S.newReply=mk1.id;}}
   if(S.stick&&S.view==='chat'&&main.querySelector('.convo')&&!main.querySelector('.convo .skel')){S.stick=false;S.newReply=null;toBottom();requestAnimationFrame(toBottom);}
-  placeChip();
+  placeChip();convAfterRender();
   if(!lampSeen&&D.crew&&D.state){lampSeen=true;try{sessionStorage.setItem('bridge-lamp','1');}catch(e){}requestAnimationFrame(lampTest);}
 }
 function lampTest(){if(REDUCE)return;const cells=[...root.querySelectorAll('.ann')];const cols=isDesk()?4:3;let i=0;

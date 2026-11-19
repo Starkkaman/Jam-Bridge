@@ -10,11 +10,12 @@ import re
 from aiohttp import web
 
 from . import agents as agents_mod
+from .conversation import CURSOR_RE, GONE_ERRORS, ConversationError
 from .crew import COMMAND_ACTIONS, CrewError
 from .db import RETRYABLE, THEMES, TICKET_STATUSES, USER_TEXT_MAX
 from .n8n import N8nError
 
-APP_VERSION = "0.1.4"
+APP_VERSION = "0.2.0"
 
 APPROVE_COMMENT = "Approved"
 LIMITS = {"title": 120, "details": 4000, "comment": 4000, "resolution": 2000}
@@ -30,6 +31,10 @@ RUNS_TTL = 60
 OUTPUT_TTL = 60
 RUN_TTL_LIVE = 15
 RUN_TTL_DONE = 86400
+AGENT_RUN_TTL = 60  # api/agents/{id}/runs/{runId}
+AGENT_OUTPUT_TTL = 30  # api/agents/{id}/output
+OUTPUT_FRESH_MIN = 5  # Refresh asks n8n again unless the copy is younger than this
+CHAT_CONTROLS = ("send", "transcript")
 SAFE_FIX = ("low", "replace_trailer")  # the owner's decision 1: "Apply all safe"
 NOT_ADMIN = "Open The Bridge from Home Assistant as an admin to make changes"
 
@@ -52,6 +57,16 @@ def ctx(request):
     app = request.app
     return (app[_k("K_DB")], app[_k("K_N8N")], app[_k("K_CREW")], app[_k("K_JOBS")], app[_k("K_HUB")],
             app[_k("K_CLOCK")])
+
+
+def conversations(request):
+    return request.app[_k("K_CONV")]
+
+
+async def audit(db, user, kind, target, summary, outcome="ok", error=None):
+    """One audit row (actions) for a read that reaches n8n or a machine: who, what, when, how it went."""
+    action_id, _ = await db.a("begin_action", user, kind, target, summary, None)
+    await db.a("finish_action", action_id, outcome, error)
 
 
 def req_user(request):
@@ -189,6 +204,59 @@ def session_brief(mid, s):
             "controls": s.get("controls")}
 
 
+def machine_commands_on(m):
+    return bool(((m or {}).get("machine") or {}).get("commands", {}).get("enabled")) if isinstance(m, dict) else False
+
+
+def session_chat(m, s):
+    """(True, None) when a Claude session is two-way (send + transcript, commands on, not ended), else (False, reason)."""
+    if not isinstance(s, dict):
+        return False, "gone"
+    if s.get("status") == "ended":
+        return False, "ended"
+    if not machine_commands_on(m):
+        return False, "commands_off"
+    controls = s.get("controls") or []
+    if "send" not in controls:
+        return False, "no_send"
+    if "transcript" not in controls:
+        return False, "no_transcript"
+    return True, None
+
+
+def thread_listed(t, status, crew):
+    """Chat lists only two-way threads (the owner's decision 1): Agent Hub, n8n agents with chat: true (on or off) and
+    Claude sessions that can both take messages and send their conversation. Unknown (no status yet, crew_hub not
+    connected) keeps a thread listed."""
+    if t["kind"] == "n8n":
+        if t["target"] == "crew":
+            return True
+        known = [a for a in (status or {}).get("agents") or [] if isinstance(a, dict)]
+        if not known:
+            return True
+        agent = agents_mod.find_agent(status, t["target"])
+        return bool(agent and agent.get("chat"))
+    machine, _, session = (t["target"] or "").partition("/")
+    if not crew.machines and not crew.connected:
+        return True
+    m = crew.machines.get(machine)
+    return session_chat(m, crew.find_session(machine, session))[0]
+
+
+def chat_sessions(crew, threads):
+    """The Claude sessions Chat offers as two-way threads, with the open pointer thread when there is one."""
+    by_target = {t["target"]: t["id"] for t in threads if t["kind"] == "claude"}
+    out = []
+    for mid, m, s in claude_sessions(crew):
+        if not session_chat(m, s)[0] or not isinstance(s.get("id"), str):
+            continue
+        target = f"{mid}/{s['id']}"
+        out.append({"machine": mid, "session": s["id"], "name": s.get("name"), "status": s.get("status"),
+                    "online": m.get("status") == "online", "updatedAt": s.get("updatedAt"),
+                    "threadId": by_target.get(target)})
+    return out
+
+
 def safe_ids(lib):
     return [f["id"] for f in (lib or {}).get("findings") or []
             if not f["applied"] and (f["severity"], f["fix"]) == SAFE_FIX]
@@ -263,9 +331,11 @@ async def get_crew(request):
 
 
 async def get_threads(request):
-    db = ctx(request)[0]
+    db, n8n, crew, *_ = ctx(request)
     archived = request.query.get("archived") == "1"
-    return web.json_response({"threads": await db.a("list_threads", req_user(request).id, archived)})
+    status, _ = await cached_status(db)
+    threads = [t for t in await db.a("list_threads", req_user(request).id, archived) if thread_listed(t, status, crew)]
+    return web.json_response({"threads": threads, "claude": [] if archived else chat_sessions(crew, threads)})
 
 
 async def get_messages(request):
@@ -308,11 +378,12 @@ async def get_tasks(request):
         "plans": plans, "at": (cache or {}).get("at")})
 
 
-async def _cached_proxy(request, key, ttl, fetch):
+async def _cached_proxy(request, key, ttl, fetch, fresh=False):
+    """`fresh` skips a cached copy older than OUTPUT_FRESH_MIN (Refresh); a failed fetch still falls back to it."""
     db, n8n, crew, jobs, hub, clock = ctx(request)
     c = await db.a("cache_get", key)
     now = clock.now_ms()
-    if c and c["data"] is not None and c["at"] and now - c["at"] < ttl * 1000:
+    if c and c["data"] is not None and c["at"] and now - c["at"] < (OUTPUT_FRESH_MIN if fresh else ttl) * 1000:
         return {"data": c["data"], "at": c["at"], "cached": True}
     try:
         data = await fetch()
@@ -357,6 +428,133 @@ async def get_agent_output(request):
     out = await _cached_proxy(request, f"output:{aid}", OUTPUT_TTL, lambda: n8n.agent_output(aid))
     out["output"] = out.pop("data")
     return web.json_response(out)
+
+
+def _known_agent(status, aid):
+    if not agents_mod.AGENT_ID_RE.match(aid or ""):
+        raise ApiError(404, "not_found", "No such agent")
+    agent = agents_mod.find_agent(status, aid)
+    if agent is None:
+        raise ApiError(404, "not_found", "No such agent")
+    return agent
+
+
+async def get_agent_run(request):
+    """api/agents/{id}/runs/{runId}: n8n's /bridge/run for a run of this agent's workflow (60 s cache; a live run
+    15 s). System and untracked agents have none."""
+    db, n8n, *_ = ctx(request)
+    user = req_user(request)
+    aid, rid = request.match_info["aid"], request.match_info["rid"]
+    status, _ = await cached_status(db)
+    agent = _known_agent(status, aid)
+    if not EXEC_RE.match(rid):
+        raise ApiError(400, "invalid", "runId must be an n8n execution id")
+    wf = agents_mod.bare_workflow_id(agent.get("workflowId"))
+    if agents_mod.group_of(agent) == "system" or agent.get("tracked") is False or not wf:
+        raise ApiError(404, "no_runs", "This agent keeps no runs")
+    c = await db.a("cache_get", f"run:{rid}")
+    live = (c or {}).get("data") and isinstance(c["data"], dict) and c["data"].get("status") in (
+        "running", "waiting", "new", None)
+    try:
+        out = await _cached_proxy(request, f"run:{rid}", RUN_TTL_LIVE if live else AGENT_RUN_TTL, lambda: n8n.run(rid))
+    except ApiError as err:
+        await audit(db, user, "agent.run", aid, f"run {rid}", "error", err.code)
+        if err.code == "n8n_http":
+            raise ApiError(404, "no_run", f"n8n has no run {rid}") from None
+        raise
+    run = out.pop("data")
+    if not isinstance(run, dict) or (run.get("workflowId") and agents_mod.bare_workflow_id(run["workflowId"]) != wf):
+        await audit(db, user, "agent.run", aid, f"run {rid}", "refused", "other workflow")
+        raise ApiError(404, "no_run", f"Run {rid} is not a run of this agent")
+    await audit(db, user, "agent.run", aid, f"run {rid}" + (" · cached" if out["cached"] else ""))
+    out["run"] = run
+    out["agentId"] = aid
+    return web.json_response(out)
+
+
+async def get_agent_output2(request):
+    """api/agents/{id}/output[?fresh=1]: a service's report from n8n's /bridge/agent-output (30 s cache; Refresh asks
+    again). Workflows have none (404 no_output), unknown ids are 404 not_found, and a known service that n8n has no
+    report for answers 200 {output: null, reason: "no_output"} (an expected state, not an error on the page)."""
+    db, n8n, *_ = ctx(request)
+    user = req_user(request)
+    aid = request.match_info["aid"]
+    status, _ = await cached_status(db)
+    if not aid.startswith("svc:") or not agents_mod.AGENT_ID_RE.match(aid):
+        raise ApiError(404, "no_output", "Only services write a report")
+    if [a for a in status.get("agents") or [] if isinstance(a, dict)]:
+        _known_agent(status, aid)
+    fresh = request.query.get("fresh") == "1"
+    try:
+        out = await _cached_proxy(request, f"output:{aid}", AGENT_OUTPUT_TTL, lambda: n8n.agent_output(aid), fresh)
+    except ApiError as err:
+        await audit(db, user, "agent.output", aid, "refresh" if fresh else "open", "error", err.code)
+        if err.code == "n8n_http":
+            return web.json_response({"id": aid, "output": None, "reason": "no_output", "cached": False})
+        raise
+    await audit(db, user, "agent.output", aid, ("refresh" if fresh else "open") + (" · cached" if out["cached"] else ""),
+                "stale" if out.get("stale") else "ok")
+    out["output"] = out.pop("data")
+    return web.json_response(out)
+
+
+# ---- Claude conversations (in memory only, docs/BRIDGE.md §13) -------------------------------------------------------
+def _session_target(request):
+    machine, session = request.match_info["machine"], request.match_info["session"]
+    if not MACHINE_RE.match(machine) or not SESSION_RE.match(session):
+        raise ApiError(404, "not_found", "No such session")
+    return machine, session
+
+
+async def get_conversation(request):
+    """api/sessions/{machine}/{session}/conversation[?after=<cursor>][&fresh=1] -> {turns, cursor, more, at, cached}
+    or {gone: true, reason}. Asked of the machine through crew_hub/transcript; kept in memory <= 60 s, never stored."""
+    db, n8n, crew, jobs, hub, clock = ctx(request)
+    user = req_user(request)
+    if not user.can_write:
+        raise ApiError(403, "not_admin", "Open The Bridge from Home Assistant as an admin to read conversations")
+    machine, session = _session_target(request)
+    after = request.query.get("after") or None
+    if after is not None and not CURSOR_RE.match(after):
+        raise ApiError(400, "invalid", "after must be a cursor from an earlier answer")
+    fresh = request.query.get("fresh") == "1"
+    if not crew.connected:
+        raise ApiError(503, "crew_disconnected", "crew_hub is not reachable")
+    m = crew.machines.get(machine)
+    s = crew.find_session(machine, session)
+    if not isinstance(m, dict) or s is None:
+        raise ApiError(404, "unknown_session", "That session is gone")
+    if m.get("status") != "online":
+        raise ApiError(409, "offline", f"{machine} is offline")
+    if not machine_commands_on(m) or "transcript" not in (s.get("controls") or []):
+        raise ApiError(409, "no_transcript", "This session can't send its conversation")
+    target = f"{machine}/{session}"
+    what = "poll" if after else "refresh" if fresh else "open"
+    try:
+        data = await conversations(request).get(machine, session, after=after, fresh=fresh)
+    except CrewError as err:
+        await audit(db, user, "claude.transcript", target, what, "timeout" if err.code == "timeout" else "error",
+                    err.code)
+        if err.code == "timeout":
+            raise ApiError(504, "crew_timeout", f"{machine} didn't answer") from None
+        raise ApiError(503, "crew_" + err.code, "crew_hub is not reachable" if err.code == "disconnected"
+                       else f"crew_hub: {err.code}") from None
+    except ConversationError as err:
+        await audit(db, user, "claude.transcript", target, what, "refused", err.code)
+        if err.code in GONE_ERRORS:
+            return web.json_response({"machine": machine, "session": session, "gone": True, "reason": err.code,
+                                      "turns": []})
+        raise ApiError(502, err.code, f"{machine} didn't send it ({err.code})") from None
+    await audit(db, user, "claude.transcript", target, what + (" · cached" if data["cached"] else ""))
+    return web.json_response({"machine": machine, "session": session, **data, "cut": bool(data["more"])})
+
+
+@write(need_client_id=False)
+async def post_conversation_close(request, body, user):
+    """The page left the conversation: forget it now rather than at the 60 s mark."""
+    machine, session = _session_target(request)
+    conversations(request).drop(f"{machine}/{session}")
+    return web.json_response({"ok": True})
 
 
 async def get_library(request):
@@ -433,6 +631,8 @@ async def post_threads(request, body, user):
         s = crew.find_session(machine, session)
         if s is None and crew.machines:
             raise ApiError(400, "unknown_session", "No such Claude session")
+        if s is not None and not session_chat(crew.machines.get(machine), s)[0]:
+            raise ApiError(400, "not_chat", "This session can't chat: " + session_chat(crew.machines.get(machine), s)[1])
         name = clean_text((s or {}).get("name"), "name", 120, reject_long=False) or session[:12]
     new = as_bool(body.get("new"), "new")
     action_id, existing = await db.a("begin_action", user, "thread.open", target, f"{kind} {target}", body["clientId"])
@@ -836,6 +1036,10 @@ def register(app):
     r.add_get("/api/tasks/runs", get_runs)
     r.add_get("/api/tasks/run", get_run)
     r.add_get("/api/agents/output", get_agent_output)
+    r.add_get("/api/agents/{aid}/runs/{rid}", get_agent_run)
+    r.add_get("/api/agents/{aid}/output", get_agent_output2)
+    r.add_get("/api/sessions/{machine}/{session}/conversation", get_conversation)
+    r.add_post("/api/sessions/{machine}/{session}/conversation/close", post_conversation_close)
     r.add_get("/api/library", get_library)
     r.add_get("/api/library/precheck", get_precheck)
     r.add_post("/api/library/apply", post_apply)

@@ -1,6 +1,24 @@
 # Changelog
 
-## 0.1.4
+## 0.2.0
+
+- Agent output: an agent's page shows its **Latest output** (the newest run's summary) above its Runs, in plain words
+  (Scheduled, From a message, From the Bridge). A run's page shows its summary, **What it did** (each tool and its call
+  count, failures marked), the last step and its output. A failed run shows n8n's error and, where the agent allows it,
+  **Try again**.
+- Services show their **Report** (24 lines, then Show all), when it was updated, and Refresh.
+- New endpoints: `api/agents/{id}/runs/{runId}` (cached 60 s; untracked and system agents have none) and
+  `api/agents/{id}/output` (cached 30 s; `?fresh=1` asks n8n again).
+- **Talk** opens a direct chat titled with the agent's name, its role and DIRECT. It also works for agents that are off,
+  as long as they have chat. Agents that can't chat say why ("Can't chat: …").
+- Claude sessions get a **Conversation** page (`#session/<machine>/<id>`) with a two-way composer. The conversation
+  comes from the machine through `crew_hub/transcript` when you open it. It is kept in memory for 60 s at most and
+  never written to the database. Steps show as counts per reply ("Read 3 files · Ran 2 commands"), and masked secrets
+  show as •••• MASKED.
+- Chat lists only two-way threads: Agent Hub, agents with chat, and Claude sessions that can take messages and send
+  their conversation. The one-way "Claude · message only" threads are gone. A Claude thread polls for new turns every
+  3 s while it is open.
+- Every conversation open, poll and refresh, and every run and output fetch, is in the audit log with the HA user.
 
 - New sidebar icon: the captain's chair (`bridge:captain-chair`), a 24 px Material-style icon from the crew_hub
   integration's icon set (needs crew_hub 0.7.1 or later; without it the sidebar entry has no icon).

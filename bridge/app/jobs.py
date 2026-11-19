@@ -116,7 +116,6 @@ class Jobs:
         self.apply_job = None
         self._chat_workers = {}
         self._tasks = set()
-        self._session_status = {}
         self.matcher_agents = []
         vis = lambda: self.hub.visible  # noqa: E731
         self.pollers = {
@@ -317,31 +316,15 @@ class Jobs:
                                   started_at=started)
         self._emit_message(row)
 
-    # ---- Claude status rows -----------------------------------------------------------------------------------------
+    # ---- Claude sessions ---------------------------------------------------------------------------------------------
+    # A Bridge thread for a Claude session is a pointer (machine/session): the conversation is read from the machine
+    # when the thread is open (conversation.py) and Claude's text is never written to the DB. Only what the user sends
+    # is stored. (Until 0.2.0 a session going idle added its summary to the thread as a "status" row.)
     def on_crew_full(self, machines):
-        for mid, data in (machines or {}).items():
-            self.on_crew_machine(mid, data)
+        pass
 
     def on_crew_machine(self, machine_id, data):
-        if not isinstance(data, dict):
-            return
-        for s in data.get("sessions") or []:
-            if not isinstance(s, dict) or not s.get("id"):
-                continue
-            key = f"{machine_id}/{s['id']}"
-            status = s.get("status")
-            prev = self._session_status.get(key)
-            self._session_status[key] = status
-            if prev is not None and prev != status and status in ("idle", "waiting"):
-                summary = str(s.get("summary") or "")[:200]
-                if summary:
-                    self.spawn(self._status_row(key, summary))
-
-    async def _status_row(self, target, summary):
-        rows = await self.db.a("q", "SELECT id FROM threads WHERE kind='claude' AND target=? AND archived=0", (target,))
-        for r in rows:
-            row = await self.db.a("add_reply", r["id"], "status", "snapshot", summary)
-            self._emit_message(row)
+        pass
 
     # ---- library apply --------------------------------------------------------------------------------------------
     def new_job(self, kind, user, detail=None):

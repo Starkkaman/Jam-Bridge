@@ -1,0 +1,66 @@
+{
+ "_comment": "Invented conversations for the fake crew_hub/transcript (machine turns, docs/COMMANDS.md § transcript). Sample text only.",
+ "nas/b8e41f03-2c6a-47d9-8e15-3a90c6d2f7e1": [
+  {
+   "kind": "user",
+   "at": "2026-10-26T13:31:12Z",
+   "text": "Build the Lovelace card next. Keep the layout steady when agents finish."
+  },
+  {
+   "kind": "assistant",
+   "at": "2026-10-26T13:32:40Z",
+   "text": "Starting on the card. I'll split it in two: a sample snapshot to test against, and the card itself.",
+   "steps": {}
+  },
+  {
+   "kind": "report",
+   "at": "2026-10-26T14:01:05Z",
+   "agent": "c2e3f40516273849",
+   "title": "Write the snapshot fixture #1",
+   "text": "Wrote card/fixtures/snapshot-sample.json: 2 machines, 12 sessions, one prompt waiting.\nThe daemon sends the CCR title as the session name, so the card shows it as is.\nOpen point: ended sessions keep their agents for 30 min. Worth a fold?"
+  },
+  {
+   "kind": "assistant",
+   "at": "2026-10-26T14:02:10Z",
+   "text": "The fixture is in. An agent is building the card now; it runs the Playwright checks when it's done.",
+   "steps": {
+    "read": 3,
+    "search": 1,
+    "agent": 1
+   }
+  },
+  {
+   "kind": "user",
+   "at": "2026-10-26T14:21:30Z",
+   "text": "[From Isaac via The Bridge] Does the card still jump when an agent finishes?"
+  },
+  {
+   "kind": "assistant",
+   "at": "2026-10-26T14:22:45Z",
+   "text": "Not any more: a finished agent keeps its row for 30 s, then folds. I measured 0 px of movement over 40 updates.\n\nThe pairing test used the Mac's command secret •••• from secrets.json. Nothing was written to the repo.",
+   "steps": {
+    "read": 2,
+    "run": 2,
+    "agent": 1
+   },
+   "masked": true
+  }
+ ],
+ "nas/8c1f2a4e-3b7d-4e19-9a61-0f2d5c7b9e10": [
+  {
+   "kind": "user",
+   "at": "2026-10-26T13:05:30Z",
+   "text": "Verify the disc engine fixes on the TV, one at a time."
+  },
+  {
+   "kind": "assistant",
+   "at": "2026-10-26T13:40:02Z",
+   "text": "6 of 7 fixes are accepted on the TV. The menu overlay fix is running now.",
+   "steps": {
+    "read": 5,
+    "edit": 2,
+    "run": 7
+   }
+  }
+ ]
+}
