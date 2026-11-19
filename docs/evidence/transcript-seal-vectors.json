@@ -1,0 +1,26 @@
+[
+  {
+    "secret": "bridge-test-secret-0123456789abcdef",
+    "nonce_hex": "000102030405060708090a0b0c0d0e0f",
+    "plaintext": "{\"session\":\"s1\",\"cursor\":\"1.0.0\",\"more\":false,\"turns\":[]}",
+    "n": "000102030405060708090a0b0c0d0e0f",
+    "c": "Llm6pjBrhF8EiV+RB06eDedzwm59Ze8In1p0xAERtVOr00CeaMLLMjIoKxbEkd03g2EfN4D4wWNr",
+    "t": "7ca64901a5ec27d54cd96f80c4c35821449a6c28bf149b764c61bd655a2bfe32"
+  },
+  {
+    "secret": "0f1e2d3c4b5a69788796a5b4c3d2e1f00f1e2d3c4b5a69788796a5b4c3d2e1f0",
+    "nonce_hex": "fffefdfcfbfaf9f8f7f6f5f4f3f2f1f0",
+    "plaintext": "{\"session\":\"5f3c9e2a-8b1d-4c7e-9a06-2d4b8e1f7c35\",\"cursor\":\"1.48213.1763460000123\",\"more\":true,\"turns\":[{\"kind\":\"user\",\"at\":1763459990000,\"text\":\"[From Isaac via The Bridge] Héllo — 世界 ✓\"},{\"kind\":\"assistant\",\"at\":1763459995000,\"text\":\"Done: 3 files changed.\",\"steps\":{\"read\":2,\"edit\":3,\"run\":1}},{\"kind\":\"report\",\"at\":1763460000123,\"agent\":\"general-purpose\",\"title\":\"Check the tests\",\"text\":\"All 12 tests pass; token ••••.\",\"masked\":true}]}",
+    "n": "fffefdfcfbfaf9f8f7f6f5f4f3f2f1f0",
+    "c": "cbsqtVVDJ/UmW8bB73v1kc2Qzg0oGAjhWGKNZYbqMh92D8jWh/UfsauZ5JqvbzgECIIRa0m2ldkyokeJvWKYoO3il42Abk4cSLKuWjCyxqz0Xg4HErNU2ah8JKkflXkU8QDrfFr36NRP/+9B6SEaoK4pXAz+rZc2SfcYYZJWt4QruVzMJF+Rm7MzecS4UMARLQ9XyBzOcJoqp//vIo++og1D3SEhVZ/x1qX8QGqWtjpSX7fUepzs61M9UuPEH1wQMot9djjZj7XUcvy4ebbuRJhKyQFVIrjnrAsna2gy24w+vtCtXJ6ESWUqHZ/pE8AOB62COb8EVdktEcZWqy49d1IPhbStqlodUxZPiTb99Qw8QCUTISU1UKHaFGAVLPhk29jCrOjIDOPGicMHwKyq8t9PEFK+Y2nuhg0CgJeByc0bycvQB0X3e/1122HJShW9BJMa6w7lR8wgdZArkn6mZcreGNAT3dcVmaj9X5u157G4ogsYbFvoo0dFezubqy6W47OERfuch8ZPs7/M6bPz0y4YWo8xdh2BGmrVHZNXMsnaMb6u5dLSWsMm6o5fVwOJvSkjO66Ltc2yCMAEHQB8Z/ovgsyolWfD2mo=",
+    "t": "dd5ebdbd339f16eeda275df979da253cf3f27a0cbef69d0f1ec37a8fd3f79898"
+  },
+  {
+    "secret": "short",
+    "nonce_hex": "a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5",
+    "plaintext": "{\"session\":\"x\",\"cursor\":\"1.1.1\",\"more\":false,\"turns\":[{\"kind\":\"assistant\",\"at\":1,\"text\":\"\",\"steps\":{}}]}",
+    "n": "a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5",
+    "c": "hl4t/ADbRWBDbdbp599rWomdsfkpyBQsbCtQtw4+O3Q0Jy2PP5xCEsZKc8unBxag/mByvL2Ou08IS2GQ5MmMsaYFRUv4LbJDVxi/t8w9GVWrqzGiF0u/fB/IxCuH0kYfgsGbbjdiyrY=",
+    "t": "21c64a64b093464f355c9f9a190a9899e6d0246084168e8e3e6c61cf588a66c7"
+  }
+]

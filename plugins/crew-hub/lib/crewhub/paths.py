@@ -52,6 +52,11 @@ def sessions_dir():
     return os.path.join(claude_dir(), "sessions")
 
 
+def projects_dir():
+    """~/.claude/projects: one folder per working directory holding the session transcripts (<session id>.jsonl)."""
+    return os.path.join(claude_dir(), "projects")
+
+
 def answers_dir():
     return os.path.join(hub_dir(), "answers")
 

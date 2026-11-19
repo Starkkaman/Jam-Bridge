@@ -22,11 +22,11 @@ import subprocess
 import threading
 import time
 
-from . import inbox, osdep, paths
+from . import inbox, osdep, paths, seal, transcript
 
 O_BINARY = getattr(os, "O_BINARY", 0)  # Windows: no CRT text-mode translation (CRLF, Ctrl+Z)
 
-ACTIONS = ("send", "answer", "interrupt", "stop", "start")
+ACTIONS = ("send", "answer", "interrupt", "stop", "start", "transcript")
 WINDOW_MS = 60 * 1000
 REPLAY_MS = 10 * 60 * 1000
 REPLAY_MAX = 5000
@@ -187,6 +187,17 @@ def validate(action, args, cmds):
         return out
     if action in ("interrupt", "stop"):
         return {"session": _session(args)}
+    if action == "transcript":
+        limit = args.get("limit", transcript.LIMIT_DEFAULT)
+        if not _int(limit) or not 1 <= limit <= transcript.LIMIT_MAX:
+            raise CommandError("bad_args:limit")
+        after = args.get("after")
+        if after is not None and transcript.parse_cursor(after) is None:
+            raise CommandError("bad_args:after")
+        out = {"session": _session(args), "limit": limit}
+        if after is not None:
+            out["after"] = after
+        return out
     if action == "start":
         folder = args.get("folder")
         if not isinstance(folder, str) or folder not in cmds.folders:
@@ -367,10 +378,11 @@ def pty_escape(argv, timeout=INTERRUPT_TIMEOUT, settle=0.4, first_output=6.0, af
 class Executor(object):
     """Runs validated actions. Every method returns a result dict or raises CommandError.
 
-    `waiting(session, requestId)` (from the daemon's model) answers "ok" | "not_waiting" | "no_hold" | ("ok", kind)."""
+    `waiting(session, requestId)` (from the daemon's model) answers "ok" | "not_waiting" | "no_hold" | ("ok", kind).
+    `session_info(session)` (the daemon's model) answers None or {"status", "tp", "agents"} for `transcript`."""
 
     def __init__(self, cmds, sessions_dir=None, claude=None, waiting=None, run=subprocess.run, pty_escape=pty_escape,
-                 claude_json=None, log=None):
+                 claude_json=None, log=None, session_info=None, projects_dir=None):
         self.cmds = cmds
         self.sessions_dir = sessions_dir or paths.sessions_dir()
         self.claude = claude or find_claude()
@@ -379,6 +391,8 @@ class Executor(object):
         self.pty_escape = pty_escape
         self.claude_json = claude_json
         self.log = log or (lambda msg: None)
+        self.session_info = session_info or (lambda session: None)
+        self.projects_dir = projects_dir
         self.answered = {}  # requestId -> time
         self.lock = threading.Lock()
 
@@ -486,6 +500,35 @@ class Executor(object):
         if sid:
             result["sessionId"] = sid
         return result
+
+    # transcript -------------------------------------------------------------------------------------------------
+    def _info(self, session):
+        for _ in range(3):  # the model belongs to the main thread: a copy may race a mutation
+            try:
+                return self.session_info(session)
+            except RuntimeError:
+                time.sleep(0.01)
+        return None
+
+    def do_transcript(self, a):
+        """The session's recent turns, sealed with the command secret (docs/COMMANDS.md `transcript`)."""
+        sid = a["session"]
+        entry = inbox.find_live(self.sessions_dir, sid)
+        info = self._info(sid) or {}
+        if entry is None and (not info or info.get("status") in (None, "ended")):
+            raise CommandError("not_live")
+        if not self.cmds.secret:
+            raise CommandError("disabled")
+        cwd = entry.get("cwd") if isinstance(entry, dict) else None
+        path = transcript.find_transcript(sid, info.get("tp"), cwd, self.projects_dir)
+        if not path:
+            raise CommandError("transcript_unavailable")
+        try:
+            plain = transcript.read(sid, path, a.get("after"), a.get("limit", transcript.LIMIT_DEFAULT),
+                                    info.get("agents"))
+        except transcript.Unavailable as e:
+            raise CommandError(e.args[0] if e.args else "transcript_unavailable")
+        return seal.seal(self.cmds.secret, plain)
 
     def _session_for_job(self, bg, wait=3.0):
         end = time.time() + wait

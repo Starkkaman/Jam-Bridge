@@ -196,7 +196,8 @@ class Daemon(object):
             log("transport webhook not usable: %s; file-only mode" % self.cfg.webhook_error)
         if self.cfg.linked:
             cmds = self.cfg.commands
-            self.commands = CommandHandler(cmds, log, executor=Executor(cmds, waiting=self.model.waiting_state, log=log))
+            executor = Executor(cmds, waiting=self.model.waiting_state, log=log, session_info=self.model.transcript_info)
+            self.commands = CommandHandler(cmds, log, executor=executor)
             if cmds.enabled and not cmds.secret:
                 log("commands enabled in config.json but secrets.json has no commandSecret: commands stay off")
             elif cmds.active:

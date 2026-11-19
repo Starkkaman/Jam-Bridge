@@ -841,6 +841,16 @@ class Model(object):
                 break
         return "not_waiting", None
 
+    def transcript_info(self, sid):
+        """For the `transcript` command (worker thread): None, or a copy of {"status", "tp", "agents": [{id, type,
+        title, status, endedAt, atp}]}. May raise RuntimeError when it races a mutation (the caller retries)."""
+        s = self.sessions.get(sid)
+        if not s:
+            return None
+        agents = [{"id": a.get("id"), "type": a.get("type"), "title": a.get("title"), "status": a.get("status"),
+                   "endedAt": a.get("endedAt"), "atp": a.get("_atp")} for a in list(s.get("agents") or [])]
+        return {"status": s.get("status"), "tp": s.get("_tp"), "agents": agents}
+
     def _agent(self, s, aid, at):
         for a in s["agents"]:
             if a["id"] == aid:
@@ -1450,6 +1460,8 @@ class Model(object):
         if s.get("kind") == "bg" and s.get("_pid"):
             # interrupt needs a pty around `claude attach` (POSIX only); stop is a plain `claude stop` everywhere
             out += ["stop"] if osdep.WINDOWS else ["interrupt", "stop"]
+        if s.get("_tp") or s.get("_pid"):
+            out.append("transcript")  # hooks recorded its transcript, or a live registry entry locates it
         return out
 
     @classmethod

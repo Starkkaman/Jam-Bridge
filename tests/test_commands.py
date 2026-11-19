@@ -721,7 +721,8 @@ class SnapshotTest(TempHome):
             s = m.snapshot({"id": "m"}, commands_active=True)["sessions"][0]
             self.assertEqual(s["kind"], "bg")
             # Windows: no interrupt (needs a pty); only what works there is advertised
-            self.assertEqual(s["controls"], ["send", "stop"] if _util.WINDOWS else ["send", "interrupt", "stop"])
+            self.assertEqual(s["controls"], ["send", "stop", "transcript"] if _util.WINDOWS
+                             else ["send", "interrupt", "stop", "transcript"])
             self.assertEqual(m.snapshot({"id": "m"}, commands_active=False)["sessions"][0]["controls"], [])
         finally:
             srv.close()

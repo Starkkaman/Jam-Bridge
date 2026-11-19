@@ -322,3 +322,100 @@ def redact(payload, ts, pid=None, plans_dir=None, summaries=True):
         if trig:
             rec["trigger"] = trig
     return rec
+
+
+# ---- secret masking (the `transcript` command, docs/COMMANDS.md) --------------------------------------------------
+# Compiled on first use only: crew-hook imports this module on every tool call and never masks.
+MASK = "\u2022\u2022\u2022\u2022"
+_SECRET_RES = None
+_KEY_WORDS = (r"(?:pass(?:word|wd|phrase)?|pwd|secret|token|api[_-]?key|apikey|access[_-]?key|private[_-]?key"
+              r"|credentials?|session[_-]?key|signing[_-]?key|webhook[_-]?id)")
+
+
+def _secret_res():
+    global _SECRET_RES
+    if _SECRET_RES is None:
+        _SECRET_RES = (
+            # private key blocks (an unterminated block is masked to the end)
+            (re.compile(r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----.*?(?:-----END [A-Z0-9 ]*PRIVATE KEY-----|\Z)", re.S), None),
+            # JWTs
+            (re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]*"), None),
+            # well-known API key / token shapes
+            (re.compile(r"\b(?:sk-(?:ant-|proj-)?[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}"
+                        r"|glpat-[A-Za-z0-9_-]{20,}|xox[abprs]-[A-Za-z0-9-]{10,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{35}"
+                        r"|hf_[A-Za-z0-9]{30,}|npm_[A-Za-z0-9]{30,})"), None),
+            # credentials in URLs: scheme://user:<pass>@host
+            (re.compile(r"(\b[A-Za-z][A-Za-z0-9+.-]*://[^\s:/@]+:)([^\s@/]+)(?=@)"), 2),
+            # Authorization: Bearer/Basic <value> (the value needs a digit or a token character)
+            (re.compile(r"(?i)(\b(?:bearer|basic)\s+)([A-Za-z0-9._~+/=-]*[0-9._~+/=][A-Za-z0-9._~+/=-]*)"
+                        r"(?<=[A-Za-z0-9._~+/=-]{8})"), 2),
+            # key = value / "key": "value" assignments
+            (re.compile(r"(?i)(\b[A-Za-z0-9_.-]*" + _KEY_WORDS + r"[A-Za-z0-9_.-]*[\"']?\s*[:=]\s*[\"']?)([^\s\"'`,;]{4,})"), 2),
+        )
+    return _SECRET_RES
+
+
+_RUN_RE = re.compile(r"[A-Za-z0-9+/=_-]{32,}")
+_UUID_RE = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
+_HEX_RUN = re.compile(r"^[0-9a-fA-F]{32,}$")
+ENTROPY_MIN = 4.0  # bits per character, for mixed-case/digit runs
+HEX_ENTROPY_MIN = 3.0  # random hex runs of 32+ characters score about 3.5-3.9
+
+
+def entropy(s):
+    """Shannon entropy of a string in bits per character."""
+    import math
+
+    if not s:
+        return 0.0
+    counts = {}
+    for ch in s:
+        counts[ch] = counts.get(ch, 0) + 1
+    n = float(len(s))
+    return -sum(c / n * math.log(c / n, 2) for c in counts.values())
+
+
+def _high_entropy(run):
+    if _UUID_RE.match(run):
+        return False
+    if _HEX_RUN.match(run):
+        return entropy(run) >= HEX_ENTROPY_MIN  # hashes, hex secrets and webhook ids (not "aaaa…" or "0000…")
+    if not (_HAS_DIGIT.search(run) and re.search(r"[a-z]", run) and re.search(r"[A-Z]", run)):
+        return False
+    return entropy(run) >= ENTROPY_MIN
+
+
+def _value_ok(v):
+    return not (v.isdigit() and len(v) < 8)  # max_tokens: 4096 is not a secret
+
+
+def mask_secrets(text):
+    """(text with secret-looking parts replaced by "••••", whether anything was masked). Patterns: private-key blocks,
+    JWTs, well-known API key shapes, URL credentials, Bearer/Basic values, password/secret/token/api-key assignments
+    and 32+ character high-entropy runs."""
+    if not isinstance(text, str) or not text:
+        return text, False
+    hit = [False]
+
+    def whole(m):
+        hit[0] = True
+        return MASK
+
+    def value(m):
+        if not _value_ok(m.group(2)):
+            return m.group(0)
+        hit[0] = True
+        return m.group(1) + MASK
+
+    for rx, group in _secret_res():
+        text = rx.sub(value if group else whole, text)
+
+    def run(m):
+        r = m.group(0)
+        if MASK in r or not _high_entropy(r):
+            return r
+        hit[0] = True
+        return MASK
+
+    text = _RUN_RE.sub(run, text)
+    return text, hit[0]
