@@ -40,6 +40,6 @@ when you come back.
 
 - **"n8n unreachable since …"**: the last good data stays on screen; check `n8n_url` and that n8n accepts the HA
   host. The log shows `n8n.firstContact HTTP <status>` once after each start.
-- **"n8n key missing or wrong"**: paste the key n8n expects into `n8n_key` and restart the app.
+- **"n8n key missing or wrong"**: paste the key n8n expects into `n8n_key` and restart the app. n8n answers 403 the same way when the Bridge's address is not on its allow-list, so if the key is right, check that next.
 - **Claude sessions missing**: check that the `crew_hub` integration is set up; the Bridge reconnects to Home
   Assistant on its own after a restart.

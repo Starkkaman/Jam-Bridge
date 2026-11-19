@@ -134,6 +134,9 @@ class N8n:
                     # a refused ticket write (validation): n8n itself is fine
                     self._set_health(True)
                     raise err
+            elif status >= 500 and path in ("agent-hub/ticket", "bridge/ticket-update"):
+                # today's ticket workflows throw on bad input: n8n answers 500 "Error in workflow", reason only in its log
+                err.message = "n8n refused the change (the reason is in n8n's execution log)"
             # an unknown id (agent-output, run), a workflow that can't re-run (500) or a scan already running (409):
             # n8n itself is fine
             if path in ("bridge/agent-output", "bridge/run", "bridge/run-now", "bridge/library/scan"):

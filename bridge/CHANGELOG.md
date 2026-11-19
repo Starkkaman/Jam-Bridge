@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.2
+
+- A ticket write that n8n rejects with HTTP 500 (its generic "Error in workflow") now reads "n8n refused the change (the
+  reason is in n8n's execution log)".
+- Log: "crew_hub websocket connected" no longer prints a machine count read before the first snapshot. That count
+  said 0 at every start. The count is now logged when the snapshot arrives ("crew_hub: N machines").
+- DOCS: a 403 from n8n can also mean the Bridge's address isn't on n8n's allow-list.
+
 ## 0.2.1
 
 - Fix: ticket status changes, comments and Approve now go to n8n's ticket-update endpoint. Before, they went to the

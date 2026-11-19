@@ -179,6 +179,8 @@ class Crew:
         elif t == "event" and mid == self._sub_id:
             ev = msg.get("event") or {}
             if ev.get("type") == "full" and isinstance(ev.get("machines"), dict):
+                if not self.machines or len(ev["machines"]) != len(self.machines):
+                    LOG.info("crew_hub: %d machines", len(ev["machines"]))
                 self.machines = ev["machines"]
                 if self.on_full:
                     self.on_full(self.machines)
@@ -196,7 +198,7 @@ class Crew:
         self.connected = value
         if value:
             self.connected_at = self.clock.now_ms()
-            LOG.info("crew_hub websocket connected (%d machines)", len(self.machines))
+            LOG.info("crew_hub websocket connected")
         else:
             LOG.info("crew_hub websocket disconnected")
         if self.on_connection:

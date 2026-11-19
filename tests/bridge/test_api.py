@@ -514,6 +514,7 @@ async def test_ticket_n8n_down(bridge, fake_n8n):
     fake_n8n.fail["agent-hub/ticket"] = 500
     r, d = await bridge.post("/api/tickets", {"title": "x", "clientId": cid()})
     assert r.status == 502 and d["code"] == "n8n_http"
+    assert "execution log" in d["error"]  # today's workflows throw on bad input: 500, reason only in n8n's log
 
 
 # ---- library apply ---------------------------------------------------------------------------------------------------
