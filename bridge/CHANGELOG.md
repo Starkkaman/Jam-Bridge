@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.3.0
+
+- **Agents by job.** The Agents tab groups agents in a fixed order: Engineering, Home, Security, Downloads, Library &
+  media, Assistants, Infrastructure, Other, then System (folded). Empty sections are hidden. Each header has a count
+  ("1 working", "2 on · 1 off"); a failing agent or one that needs you lights its section's header and edge in place,
+  without reordering. `SANDBOX:` copies are never listed or counted; the System fold says how many are hidden.
+- **Talk on the row.** Every agent that can chat gets a small TALK key on its row (◇ marks OpenCode). Agents that are
+  off keep it.
+- **OpenCode agents** (the Engineer, the HA builder): an agent page with its description, state, a New chat key, what
+  it may do from here and its sessions (From the Bridge / From a ticket / Started in OpenCode). A chat page shows the
+  replies, its steps as counts ("13 steps · Read 7 · Searched 3 …"), "Working… 2:13 · you can close the Bridge" while it
+  works, and a composer that waits until it replies. Only chats started from the Bridge take messages; a ticket chat
+  says "Reply in ticket #N", one started in OpenCode says to continue there. One Bridge chat per agent runs at a time:
+  a busy agent offers "Continue that chat".
+- **Approvals stay in OpenCode.** When an OpenCode agent waits for approval, the Bridge shows it (Now's "needs you",
+  the agent, the chat, Chat) with its request and **Open OpenCode ↗**. The Bridge never answers approvals.
+- New option `opencode_url` (optional): where Open OpenCode goes. Without it the page says "Answer it in OpenCode".
+- Chat lists Bridge-started OpenCode chats as "<agent> · OpenCode", with Working… or ▲ Needs your approval.
+- New endpoints: `api/opencode/agents`, `api/opencode/agents/{id}/sessions`, `api/opencode/sessions/{id}` (in memory
+  for 15-30 s, shared by every viewer, never stored) and `POST api/opencode/agents/{id}/messages` (one message per 10 s
+  per user, audited as `opencode.message`). The page polls them only while it is visible.
+
 ## 0.2.2
 
 - A ticket write that n8n rejects with HTTP 500 (its generic "Error in workflow") now reads "n8n refused the change (the

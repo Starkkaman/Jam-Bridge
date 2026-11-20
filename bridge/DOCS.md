@@ -18,6 +18,7 @@ when you come back.
 |---|---|---|
 | `n8n_url` | yes | Base URL of n8n, e.g. `http://<nas-ip>:<n8n-port>`. The Bridge only calls its fixed list of `/webhook/agent-hub/*` and `/webhook/bridge/*` endpoints under it. |
 | `n8n_key` | no (until n8n asks for it) | Shared secret sent as the `X-Bridge-Key` header on every n8n call. It stays in the app options: never shown in the page, never logged, never stored in the Bridge's database. If n8n answers 401/403, the page shows "n8n key missing or wrong". |
+| `opencode_url` | no | Where **Open OpenCode ↗** goes (a new tab) when an OpenCode agent waits for your approval, e.g. the OpenCode web page on your server. The Bridge never answers approvals itself. Without it, the page says "Answer it in OpenCode" and shows no link. |
 | `log_level` | no | `debug`, `info` (default), `warning` or `error`. |
 
 ## Who can use it
@@ -35,6 +36,9 @@ when you come back.
 - The app is included in Home Assistant backups (a consistent snapshot of the database is taken just before each
   backup). Backups contain your chat text, so use HA's backup encryption.
 - Agent output, tickets and inbox items are shown as plain text; the Bridge never acts on what an agent writes.
+- OpenCode chats (the Engineer, the HA builder) come from n8n when you open them and stay in the app's memory for
+  15-30 s only; they are never written to the database. What you send is in the audit log as "sent a message", without
+  the text.
 
 ## Troubleshooting
 

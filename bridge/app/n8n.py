@@ -3,7 +3,7 @@
 - `X-Bridge-Key` (the `n8n_key` option) is added to every call when set. It is never logged, stored or returned;
   401/403 become the setup banner "n8n key missing or wrong".
 - No redirects, no environment proxies, bodies <= 1 MB (agent-hub/status 2 MB). Timeouts: GETs 15 s, chat 120 s,
-  ticket POSTs 20 s, apply 900 s (logical seconds; the clock scales them in tests).
+  ticket POSTs 20 s, apply 900 s, OpenCode reads 15-20 s and messages 30 s (logical seconds; the clock scales them in tests).
 - The first response after a start is logged once with its HTTP status only (`n8n.firstContact`).
 """
 
@@ -30,9 +30,14 @@ ALLOWED = frozenset({
     ("POST", "bridge/library/apply"),
     ("POST", "bridge/run-now"),
     ("POST", "bridge/library/scan"),
+    ("GET", "bridge/opencode/agents"),
+    ("GET", "bridge/opencode/sessions"),
+    ("GET", "bridge/opencode/session"),
+    ("POST", "bridge/opencode/message"),
 })
 TIMEOUTS = {"bridge/chat": 120, "agent-hub/ticket": 20, "bridge/ticket-update": 20, "bridge/library/apply": 900, "bridge/run-now": 30,
-            "bridge/library/scan": 30}
+            "bridge/library/scan": 30, "bridge/opencode/agents": 15, "bridge/opencode/sessions": 15,
+            "bridge/opencode/session": 20, "bridge/opencode/message": 30}
 GET_TIMEOUT = 15
 MAX_BODY = 1024 * 1024
 MAX_BODY_STATUS = 2 * 1024 * 1024
@@ -42,11 +47,12 @@ KEY_ERROR = "n8n key missing or wrong"
 class N8nError(Exception):
     """code: not_configured | not_allowed | timeout | unreachable | key | http | too_big | bad_json"""
 
-    def __init__(self, code, message, status=None):
+    def __init__(self, code, message, status=None, data=None):
         super().__init__(message)
         self.code = code
         self.message = message
         self.status = status
+        self.data = data  # an HTTP error's JSON object body (OpenCode's 409 carries sessionId), else None
 
 
 class N8n:
@@ -126,7 +132,7 @@ class N8n:
             self._set_health(False, err.message, err.code)
             raise err
         if not 200 <= status < 300:
-            err = N8nError("http", f"n8n answered HTTP {status}", status)
+            err = N8nError("http", f"n8n answered HTTP {status}", status, self._error_body(raw))
             reason = self._error_text(raw)
             if reason and 400 <= status < 500:
                 err.message = f"n8n: {reason}"
@@ -139,7 +145,9 @@ class N8n:
                 err.message = "n8n refused the change (the reason is in n8n's execution log)"
             # an unknown id (agent-output, run), a workflow that can't re-run (500) or a scan already running (409):
             # n8n itself is fine
-            if path in ("bridge/agent-output", "bridge/run", "bridge/run-now", "bridge/library/scan"):
+            # OpenCode: a 400 (bad id, "session <id> not found", not a Bridge session) or a 409 (busy) is an answer
+            if path in ("bridge/agent-output", "bridge/run", "bridge/run-now", "bridge/library/scan") or (
+                    path.startswith("bridge/opencode/") and 400 <= status < 500):
                 self._set_health(True)
             else:
                 self._set_health(False, err.message, err.code)
@@ -152,6 +160,14 @@ class N8n:
             raise err from None
         self._set_health(True)
         return data
+
+    @staticmethod
+    def _error_body(raw):
+        try:
+            data = json.loads(raw.decode("utf-8"))
+        except (ValueError, UnicodeDecodeError):
+            return None
+        return data if isinstance(data, dict) else None
 
     @staticmethod
     def _error_text(raw):
@@ -231,3 +247,17 @@ class N8n:
 
     async def library_scan(self, body):
         return await self.request("POST", "bridge/library/scan", body=body)
+
+    # OpenCode agents (docs/BRIDGE.md §14): the add-on caches these in memory only (opencode.py)
+    async def oc_agents(self):
+        return await self.shared("oc:agents", "GET", "bridge/opencode/agents")
+
+    async def oc_sessions(self, agent, limit=20):
+        return await self.shared(f"oc:sessions:{agent}", "GET", "bridge/opencode/sessions",
+                                 {"agent": agent, "limit": str(limit)})
+
+    async def oc_session(self, session_id):
+        return await self.shared(f"oc:session:{session_id}", "GET", "bridge/opencode/session", {"id": session_id})
+
+    async def oc_message(self, body):
+        return await self.request("POST", "bridge/opencode/message", body=body)

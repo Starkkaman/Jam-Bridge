@@ -57,22 +57,23 @@ const API={state:'api/state',overview:'api/overview',crew:'api/crew',threads:'ap
   tasks:'api/tasks',runs:wf=>'api/tasks/runs?workflowId='+enc(wf),run:(aid,rid)=>'api/agents/'+enc(aid)+'/runs/'+enc(rid),output:aid=>'api/agents/'+enc(aid)+'/output',rerun:'api/agents/rerun',
   conv:(mk,id,o)=>'api/sessions/'+enc(mk)+'/'+enc(id)+'/conversation'+(o&&o.after?'?after='+enc(o.after):o&&o.fresh?'?fresh=1':''),convClose:(mk,id)=>'api/sessions/'+enc(mk)+'/'+enc(id)+'/conversation/close',
   library:'api/library',precheck:'api/library/precheck',apply:'api/library/apply',inbox:b=>'api/inbox'+(b!=null?'?before='+enc(b):''),
-  command:'api/claude/command',dismiss:'api/claude/dismiss',settings:'api/settings',events:'api/events'};
-class ApiError extends Error{constructor(msg,status,code){super(msg);this.status=status;this.code=code;}}
+  command:'api/claude/command',dismiss:'api/claude/dismiss',settings:'api/settings',events:'api/events',
+  ocAgents:'api/opencode/agents',ocSessions:id=>'api/opencode/agents/'+enc(id)+'/sessions',ocSession:(s,f)=>'api/opencode/sessions/'+enc(s)+(f?'?fresh=1':''),ocSend:id=>'api/opencode/agents/'+enc(id)+'/messages'};
+class ApiError extends Error{constructor(msg,status,code,data){super(msg);this.status=status;this.code=code;this.data=data||{};}}
 async function req(method,url,body){
   const o={method,credentials:'same-origin',cache:'no-store',headers:{Accept:'application/json'}};
   if(method!=='GET'){o.headers['Content-Type']='application/json';o.headers['X-Bridge']='1';o.body=JSON.stringify(Object.assign({clientId:uuid()},body||{}));}
   let r;try{r=await fetch(url,o);}catch(e){throw new ApiError('The Bridge isn\'t answering',0,'network');}
   let j=null;try{j=await r.json();}catch(e){}
-  if(!r.ok){const m=j&&j.error?str(j.error):r.status===403?'Open The Bridge from Home Assistant to make changes':'Error '+r.status;throw new ApiError(m,r.status,j&&j.code);}
+  if(!r.ok){const m=j&&j.error?str(j.error):r.status===403?'Open The Bridge from Home Assistant to make changes':'Error '+r.status;throw new ApiError(m,r.status,j&&j.code,j);}
   return j;}
 const get=u=>req('GET',u),post=(u,b)=>req('POST',u,b),patch=(u,b)=>req('PATCH',u,b);
 
 /* ---------- data: one cache per endpoint; views ask with use(), which fetches once and re-renders ---------- */
-const D={state:null,overview:null,crew:null,threads:null,msgs:{},more:{},tickets:null,tasks:null,runs:{},run:{},output:{},library:null,inbox:null,inboxMore:false,jobs:{}};
+const D={state:null,overview:null,crew:null,threads:null,msgs:{},more:{},tickets:null,tasks:null,runs:{},run:{},output:{},library:null,inbox:null,inboxMore:false,jobs:{},oca:null,ocs:{},oct:{}};
 const ERR={},LOADING={};
-const URLS={state:API.state,overview:API.overview,crew:API.crew,threads:API.threads,tickets:API.tickets,tasks:API.tasks,library:API.library,inbox:API.inbox()};
-const PICK={threads:j=>arr(j&&(j.threads||j)),tickets:j=>arr(j&&(j.tickets||j)),inbox:j=>{D.inboxMore=!!(j&&j.more);return arr(j&&(j.items||j.inbox||j));},
+const URLS={state:API.state,overview:API.overview,crew:API.crew,threads:API.threads,tickets:API.tickets,tasks:API.tasks,library:API.library,inbox:API.inbox(),oca:API.ocAgents};
+const PICK={oca:j=>arr(j&&j.agents),threads:j=>arr(j&&(j.threads||j)),tickets:j=>arr(j&&(j.tickets||j)),inbox:j=>{D.inboxMore=!!(j&&j.more);return arr(j&&(j.items||j.inbox||j));},
   library:j=>j&&j.report!==undefined?Object.assign({findings:[],notes:[],errors:[],none:!j.report},j.report||{},{safeIds:j.safeIds,applyJob:j.applyJob,agent:j.agent,quietHours:j.quietHours}):j};
 function load(k,force){
   if(LOADING[k]||(!force&&(D[k]!=null||ERR[k])))return;LOADING[k]=true;
@@ -86,7 +87,7 @@ function onLoaded(k){
   const aj=k==='library'?D.library&&D.library.applyJob:k==='state'?D.state&&D.state.applyJob:null;if(aj&&aj.id)D.jobs[aj.id]=Object.assign({},D.jobs[aj.id],aj);
 }
 /* refetch whatever the page holds (after an SSE hello: there is no replay) */
-function refetchAll(){['state','crew','overview','threads','tickets','tasks','library','inbox'].forEach(k=>{if(D[k]!=null||ERR[k]){delete ERR[k];load(k,true);}});
+function refetchAll(){D.ocs={};D.oct={};['state','crew','overview','threads','tickets','tasks','library','inbox','oca'].forEach(k=>{if(D[k]!=null||ERR[k]){delete ERR[k];load(k,true);}});
   D.runs={};D.run={};D.output={};Object.keys(CONV).forEach(k=>delete CONV[k]);const t=S.chat&&S.chat!=='list'&&S.chat!=='new'?S.chat:null;D.msgs={};D.more={};if(t)loadMsgs(t);}
 
 /* ---------- normalised views of the data ---------- */
@@ -94,10 +95,18 @@ const SYS_NAMES=['The Bridge: API','Phone Reply Agent','Engineer: notify','Engin
 const isSys=a=>a.group==='system'||/^Agent Hub: /.test(a.name||'')||SYS_NAMES.includes(a.name);
 const short=n=>str(n).replace(/\s*\([^)]*\)\s*$/,'').replace(/ voice assistant$/,'');
 function n8nOf(){const c=D.crew||{};return c.n8n||c.status||{};}
-function agentsOf(){const c=D.crew;if(!c)return[];const g=c.agents;if(Array.isArray(g))return g;if(g&&typeof g==='object'){const out=[];['agents','services','system'].forEach(k=>arr(g[k]).forEach(a=>out.push(Object.assign({group:k},a))));return out;}return arr(n8nOf().agents);}
+let SANDBOX_N=0;   // SANDBOX:* copies never reach AGENTS (counts, Now, hero); only the System fold mentions them
+const isSandbox=a=>/^SANDBOX:/i.test(str(a.name));
+const isOC=a=>!!a&&(/^opencode/.test(str(a.kind))||/^oc:/.test(str(a.id)));
+/* OpenCode agents: the status row (api/crew) plus the live fields from api/opencode/agents */
+function ocMerge(a){if(!isOC(a))return a;const o=arr(D.oca).find(x=>x.id===a.id);if(!o)return a;
+  return Object.assign({},a,{short_name:o.short_name,description:o.description||a.description,busy:o.busy,busySince:o.busySince,needsApproval:o.needsApproval,lastSession:o.lastSession,role:a.role||o.role});}
+function agentsOf(){const c=D.crew;if(!c)return[];const g=c.agents;let out=[];
+  if(Array.isArray(g))out=g.slice();else if(g&&typeof g==='object')['agents','services','system'].forEach(k=>arr(g[k]).forEach(a=>out.push(Object.assign({group:k},a))));else out=arr(n8nOf().agents);
+  const v=out.filter(a=>!isSandbox(a));SANDBOX_N=(+c.sandboxHidden||0)+out.length-v.length;return v.map(ocMerge);}
 function machinesOf(){const c=D.crew;if(!c||!c.machines)return[];return Object.keys(c.machines).map(k=>Object.assign({key:k},c.machines[k]||{})).filter(m=>m.machine);}
 let AGENTS=[],MACH=[],SESS=[];
-function derive(){AGENTS=agentsOf();MACH=machinesOf();SESS=[];MACH.forEach(m=>arr(m.sessions).forEach(s=>{const c=Object.assign({},s);c.mk=m.key;c.m=m;SESS.push(c);}));}
+function derive(){AGENTS=agentsOf();if(AGENTS.some(isOC))load('oca');MACH=machinesOf();SESS=[];MACH.forEach(m=>arr(m.sessions).forEach(s=>{const c=Object.assign({},s);c.mk=m.key;c.m=m;SESS.push(c);}));}
 const ANS={};   // answered Claude prompts, by requestId (until the snapshot moves on)
 const ask=s=>s.status==='waiting'&&s.waiting?s.waiting:null;
 const openAsk=s=>{const w=ask(s);return w&&!ANS[w.requestId]?w:null;};
@@ -110,6 +119,8 @@ const needs=()=>SESS.filter(openAsk).sort((a,b)=>tm(a.waiting.since)-tm(b.waitin
 function litAsk(){if(alertN())return null;const n=needs().filter(canAnswer);return n.length&&n[0].waiting.kind==='permission'?n[0].waiting.requestId:null;}
 const working=()=>SESS.filter(s=>s.status==='working'||(s.status==='waiting'&&ANS[(s.waiting||{}).requestId]));
 function aState(a){
+  if(isOC(a)){if(a.state==='down')return{c:'offline',w:'Not answering'};if(a.needsApproval)return{c:'caut',w:'Needs you'};
+    if(a.busy||a.state==='running')return{c:'busy',w:'Working'};if(a.state==='off'||a.active===false)return{c:'off',w:'Off'};return{c:'run',w:'Idle'};}
   if(a.state==='error'&&!untracked(a))return{c:'warn',w:'Failed'};
   if(a.state==='down')return{c:'offline',w:'Not answering'};
   if(a.state==='off'||a.active===false)return{c:'off',w:'Off'};
@@ -216,6 +227,7 @@ function sseOpen(){
   on('inbox',d=>{if(D.inbox||ERR.inbox)load('inbox',true);if(D.state&&D.state.unread&&d.count!=null)D.state.unread.inbox=d.count;sched('inbox');});
   on('library',d=>{if(D.library){const ap_=new Set(arr(d.applied));if(d.date&&D.library.date&&d.date!==D.library.date){load('library',true);return;}FINDS().forEach(f=>{if(ap_.has(f.id)&&!f.applied){f.applied=true;f.at=now();}});}sched('library');});
   on('job',d=>{if(!d.id)return;D.jobs[d.id]=Object.assign({},D.jobs[d.id],d);if(d.kind==='library.apply'||/library/.test(str(d.kind)))jobChanged(d);sched('library');});
+  on('opencode',d=>ocChanged(d));
   on('settings',d=>{if(D.state){D.state.settings=Object.assign({},D.state.settings,d);applySettings();sched('all');}});
   es.onerror=()=>{if(es.readyState===EventSource.CLOSED){S.sse='down';if(!S.sseDownAt)S.sseDownAt=now();const w=BACKOFF[Math.min(esTry,BACKOFF.length-1)];esTry++;esTimer=setTimeout(sseOpen,w*1000);schedule();}
     else if(S.sse!=='down'){S.sse='retry';if(!S.sseDownAt)S.sseDownAt=now();}};
@@ -230,6 +242,7 @@ const TABS=[['now','Now'],['crew','Crew'],['chat','Chat'],['tickets','Tickets'],
 const RAIL=[['now','Now'],['crew','Crew'],['chat','Chat'],['tickets','Tickets'],['tasks','Tasks'],['library','Library'],['inbox','Inbox']];
 const UNDER_MORE=['tasks','library','inbox','settings'];
 function route(){const v=S.view;
+  if(v==='crew'&&S.oc)return 'oc/'+enc(S.oc.a)+'/'+enc(S.oc.s);
   if(v==='crew'&&S.sess)return 'session/'+enc(S.sess.mk)+'/'+enc(S.sess.id);
   if(v==='crew'&&S.agent)return 'agent/'+enc(S.agent)+(S.run?'/run/'+enc(S.run):'');
   if(v==='crew')return 'crew'+(S.crew==='agents'?'/agents':'');
@@ -237,7 +250,8 @@ function route(){const v=S.view;
   if(v==='tickets')return S.newT?'tickets/new':S.ticket!=null?'ticket/'+enc(S.ticket):'tickets'+(S.tf!=='open'?'/'+S.tf:'');
   return v;}
 function parseRoute(){const p=location.hash.replace(/^#\/?/,'').split('/').map(x=>{try{return decodeURIComponent(x);}catch(e){return x;}});
-  Object.assign(S,{view:'now',agent:null,run:null,ticket:null,newT:false,inbox:null,sess:null});const v=p[0]||'now';
+  Object.assign(S,{view:'now',agent:null,run:null,ticket:null,newT:false,inbox:null,sess:null,oc:null});const v=p[0]||'now';
+  if(v==='oc'&&p[1]&&p[2]){S.view='crew';S.crew='agents';S.oc={a:p[1],s:p[2]};return;}
   if(v==='session'&&p[1]&&p[2]){S.view='crew';S.crew='claude';S.sess={mk:p[1],id:p[2]};return;}
   if(v==='agent'&&p[1]){S.view='crew';S.crew='agents';S.agent=p[1];S.run=p[2]==='run'&&p[3]?p[3]:null;return;}
   if(v==='crew'){S.view='crew';S.crew=p[1]==='agents'?'agents':'claude';return;}
@@ -245,13 +259,13 @@ function parseRoute(){const p=location.hash.replace(/^#\/?/,'').split('/').map(x
   if(v==='ticket'&&p[1]){S.view='tickets';S.ticket=isNaN(+p[1])?p[1]:+p[1];return;}
   if(v==='tickets'){S.view='tickets';if(p[1]==='new')S.newT=true;else if(['open','needs','progress','done'].includes(p[1]))S.tf=p[1];return;}
   if(['now','tasks','library','inbox','more','settings'].includes(v))S.view=v;}
-function go(view,o){S.view=view;Object.assign(S,{agent:null,run:null,ticket:null,newT:false,inbox:null,sess:null},o||{});
+function go(view,o){S.view=view;Object.assign(S,{agent:null,run:null,ticket:null,newT:false,inbox:null,sess:null,oc:null},o||{});
   if(view==='chat'&&!(o&&'chat' in o))S.chat=isDesk()?(S.chat&&S.chat!=='list'?S.chat:null):'list';
   if(view==='chat')S.stick=true;
   const r='#'+route();if(location.hash!==r)history.pushState(null,'',r);render(true);window.scrollTo(0,0);}
 window.addEventListener('popstate',()=>{parseRoute();render(true);});
 function threadUnread(){return arr(D.threads).reduce((a,t)=>a+(+t.unread||0),0);}
-function counts(){const un=(D.state&&D.state.unread)||{};const n=needs().length+alertN()+tNeedN();
+function counts(){const un=(D.state&&D.state.unread)||{};const n=needs().length+alertN()+tNeedN()+ocNeeds().length;
   const u=D.threads?threadUnread():(+un.chat||+un.threads||0);
   const o=D.tickets?D.tickets.filter(t=>tStatus(t)!=='done').length:(+un.tickets||0);
   const l=D.library?FINDS().filter(f=>!f.applied).length:(+un.library||0);return{now:n,chat:u,tickets:o,library:l,inbox:+un.inbox||0};}
@@ -267,6 +281,7 @@ function renderNav(){
   rl.append(navLink('settings','Settings',S.view==='settings','foot'));
 }
 function backOf(){
+  if(S.view==='crew'&&S.oc){const a=AGENTS.find(x=>x.id===S.oc.a);return[a?a.name:'Agent',()=>go('crew',{agent:S.oc.a,crew:'agents'})];}
   if(S.view==='crew'&&S.sess)return['Crew',()=>go('crew',{crew:'claude'})];
   if(S.view==='crew'&&S.agent&&S.run)return['Agent',()=>go('crew',{agent:S.agent,crew:'agents'})];
   if(S.view==='crew'&&S.agent)return['Crew',()=>go('crew',{crew:'agents'})];
@@ -403,21 +418,43 @@ function machineBlock(m){
   return box;}
 
 /* ---------- n8n parts ---------- */
-function agentLi(a){const st=aState(a),b=h('button','li');b.type='button';b.addEventListener('click',()=>go('crew',{agent:a.id,crew:'agents'}));
-  const lr=tm(a.last_run);
-  const sub=a.kind==='service'?['Service',a.version?'v'+a.version:null,a.last_status].filter(Boolean).join(' · '):untracked(a)?'Not tracked':(lr?'Last run '+(dayKey(lr)===dayKey(now())?hm(lr):(a.last_run_ago||dmon(lr))):'No runs yet');
-  ap(b,pip(pipOf(st.c)),h('span','t',a.name),h('span','m',st.w),h('span','go'),h('span','s',sub));if(S.agent===a.id)b.setAttribute('aria-current','true');return b;}
+/* the Agents tab: one section per job in a fixed order (Other last), then System folded; a failing or needs-you agent
+   lights its section header and list edge in place, never reordering (design/bridge/categories-opencode) */
+const JOBS=[['engineering','Engineering'],['home','Home'],['security','Security'],['downloads','Downloads'],['library','Library & media'],['general','Assistants'],['service','Infrastructure']];
+const jobOf=a=>a.job||(a.role==='system'||(!a.role&&isSys(a))?'system':JOBS.some(j=>j[0]===a.role)?a.role:'other');
+function agentRowEl(a){
+  const st=aState(a),oc=isOC(a),r=h('div','li agr'+(oc?' ocrow':'')),nm=h('button','t',a.name);nm.type='button';
+  nm.addEventListener('click',()=>go('crew',{agent:a.id,crew:'agents'}));
+  let sub;
+  if(oc){const L=ocSessions(a)||[],cur=L.find(s=>s.needsApproval)||L.find(s=>s.busy)||L[0]||a.lastSession;sub=h('span','s');
+    if(st.c==='caut')ap(sub,h('span','cw','Approve in OpenCode'),cur?' · '+ocTitle(cur):'');else sub.append('OpenCode'+(cur?' · '+ocTitle(cur):''));}
+  else{const lr=tm(a.last_run);sub=h('span','s',a.kind==='service'?['Service',a.version?'v'+a.version:null,a.last_status].filter(Boolean).join(' · '):untracked(a)?'Not tracked':(lr?'Last run '+(dayKey(lr)===dayKey(now())?hm(lr):(a.last_run_ago||dmon(lr))):'No runs yet'));}
+  const bs=oc&&st.c==='busy'?ocBusySince(a):null;
+  ap(r,pip(pipOf(st.c)),nm,h('span','m'+(st.c==='caut'?' caut':st.c==='warn'?' warn':''),bs?'Working '+span(now()-bs):st.w));
+  if(a.chat){const tk=h('button','tk');tk.type='button';if(oc)tk.append(h('span','oc'));tk.append('Talk');tk.setAttribute('aria-label','Talk to '+a.name);   // off agents keep Talk too
+    tk.addEventListener('click',e=>{e.stopPropagation();if(oc)ocTalk(a);else talk(a);});r.append(tk);}else r.append(h('span'));
+  r.append(h('span','go'),sub);if(S.agent===a.id)r.setAttribute('aria-current','true');return r;}
+function secSummary(L){const c={warn:0,caut:0,busy:0,run:0,off:0,offline:0};L.forEach(a=>{const k=aState(a).c;c[k]=(c[k]||0)+1;});
+  const hot=[],calm=[];if(c.warn+c.offline)hot.push((c.warn+c.offline)+' failing');if(c.caut)hot.push(c.caut+' needs you');
+  if(c.busy)calm.push(c.busy+' working');if(c.run)calm.push(c.run+' on');if(c.off)calm.push(c.off+' off');
+  return{hot,calm,lvl:c.warn+c.offline?'warn':c.caut?'caut':''};}
 function agentsBlock(){
-  const box=h('div','stack'),main_=AGENTS.filter(a=>!isSys(a)),sys=AGENTS.filter(isSys);
-  if(!AGENTS.length){box.append(h('p','dim','No agents reported by n8n yet.'));return box;}
-  const l=h('div','list');main_.forEach(a=>l.append(agentLi(a)));if(main_.length)box.append(l);
-  if(sys.length){const k='sys',open=!!S.open[k],sl=h('div','list'),okN=sys.filter(a=>['run','busy'].includes(aState(a).c)).length;
-    const f=h('button','fold');f.type='button';ap(f,h('span','plate','System'),h('span','num dim',okN===sys.length?sys.length+' online':(sys.length-okN)+' need you'));f.setAttribute('aria-expanded',open);f.addEventListener('click',()=>{S.open[k]=!open;render();});sl.append(f);
-    if(open)sys.forEach(a=>sl.append(agentLi(a)));box.append(sl);}
+  const box=h('div','secs');
+  if(!AGENTS.length&&!SANDBOX_N){box.append(h('p','dim','No agents reported by n8n yet.'));return box;}
+  JOBS.concat([['other','Other']]).forEach(([k,label])=>{const L=AGENTS.filter(a=>jobOf(a)===k);if(!L.length)return;
+    const sm=secSummary(L),sec=h('section','sec'+(sm.lvl?' '+sm.lvl:'')),id=uid('sec'),hd=h('h3','sechd'),sum=h('span','sum');
+    if(sm.hot.length)sum.append(h('span','hot',sm.hot.join(' · ')));if(sm.hot.length&&sm.calm.length)sum.append(' · ');sum.append(sm.calm.join(' · '));
+    const pl=h('span','pl',label);pl.id=id;ap(hd,pl,sum);sec.setAttribute('aria-labelledby',id);
+    const l=h('div','list');L.forEach(a=>l.append(agentRowEl(a)));ap(sec,hd,l);box.append(sec);});
+  const sys=AGENTS.filter(a=>jobOf(a)==='system');
+  if(sys.length||SANDBOX_N){const k='sys',open=!!S.open[k],sec=h('section','sec'),sl=h('div','list'),okN=sys.filter(a=>['run','busy'].includes(aState(a).c)).length;
+    const f=h('button','fold');f.type='button';ap(f,h('span','plate','System'),h('span','num dim',okN===sys.length?sys.length+' online':(sys.length-okN)+' need you'),SANDBOX_N?h('span','hid','+'+SANDBOX_N+' sandbox cop'+(SANDBOX_N===1?'y':'ies')+' hidden'):null);
+    f.setAttribute('aria-expanded',open);f.addEventListener('click',()=>{S.open[k]=!open;render();});sl.append(f);
+    if(open)sys.forEach(a=>sl.append(agentRowEl(a)));const hd=h('div','sechd');hd.style.padding='8px 0 0';ap(sec,hd,sl);box.append(sec);}
   return box;}
 const RUN_PICK=j=>arr(j&&(j.runs||j));
 /* ---------- agent output + Talk (design/bridge/output-talk): plain words for roles, run modes and results ---------- */
-const ROLE={downloads:'Downloads',library:'Library',security:'Security',general:'General',system:'System',service:'Service'};
+const ROLE={engineering:'Engineering',home:'Home',downloads:'Downloads',library:'Library',security:'Security',general:'General',system:'System',service:'Service'};
 const roleTag=a=>a&&ROLE[a.role]?h('span','rtag',ROLE[a.role]):null;
 /* why an agent can't chat: n8n sends chat:false only; the words come from a chat_note field or this table */
 const NOCHAT={'svc:wheatley':'Wheatley has its own voice app.','svc:llm':'it\'s the language model the agents use, not an agent.'};
@@ -478,14 +515,14 @@ function copyText(t){if(navigator.clipboard&&window.isSecureContext)return navig
 const V={};
 V.now=function(m){
   const crew=need(m,'crew','the crew',4);if(!crew)return;use('overview');
-  const n=needs(),al=alertAgents(),ma=machAlerts(),wk=working(),desk=isDesk(),N=n8nOf(),O=D.overview||{},tk=tNeeds()||[],nn=n.length+tk.length;
+  const n=needs(),al=alertAgents(),ma=machAlerts(),wk=working(),desk=isDesk(),N=n8nOf(),O=D.overview||{},tk=tNeeds()||[],oc=ocNeeds(),nn=n.length+tk.length+oc.length;
   const top=gap(h('div','stack'),'8px');
-  const hero=al.length?al[0].name+' failed.':ma.length?str(ma[0].M.machine.name||ma[0].M.key).replace(/^./,c=>c.toUpperCase())+' missed '+ma[0].n+' runs.':nn===1?(n.length?n[0].name:'Ticket #'+tk[0].id)+' needs you.':nn?nn+' need you.':wk.length?'All fine.':'All quiet.';
+  const hero=al.length?al[0].name+' failed.':ma.length?str(ma[0].M.machine.name||ma[0].M.key).replace(/^./,c=>c.toUpperCase())+' missed '+ma[0].n+' runs.':nn===1?(n.length?n[0].name:tk.length?'Ticket #'+tk[0].id:oc[0].name)+' needs you.':nn?nn+' need you.':wk.length?'All fine.':'All quiet.';
   const mainA=AGENTS.filter(a=>!isSys(a)),onN=mainA.filter(a=>aState(a).c==='run').length,offN=mainA.filter(a=>aState(a).c==='off').length;
   const lead=[(al.length||ma.length)&&nn?nn+' need you':null,wk.length?wk.length+' running':'Nothing running',onN+' agents on'+(offN?', '+offN+' off':'')].filter(Boolean).join(' · ');
   ap(top,h('h1','hero',hero),h('p','lead',lead));
   const banners=[...al.map(a=>failBanner(a,false)),...ma.map(missBanner)];
-  const needBox=nn?ap(h('div','stack'),...n.map(s=>{const p=h('section','panel need');p.append(ap(h('div','row sb'),plate('Needs you'),h('span','num dim','Since '+hm(tm(s.waiting.since)))),h('h2','vt',s.name),askBlock(s));return p;}),...tk.map(ticketNeed)):null;   // tickets after the Claude prompts
+  const needBox=nn?ap(h('div','stack'),...n.map(s=>{const p=h('section','panel need');p.append(ap(h('div','row sb'),plate('Needs you'),h('span','num dim','Since '+hm(tm(s.waiting.since)))),h('h2','vt',s.name),askBlock(s));return p;}),...tk.map(ticketNeed),...oc.map(ocNeed)):null;   // tickets after the Claude prompts, then OpenCode approvals
   const bd=h('div','board');bd.setAttribute('aria-label','Status board');
   const cell=(name,c,word,fn)=>{const b=h('button','ann '+c);b.type='button';ap(b,h('b',null,name),h('i',null,word));b.addEventListener('click',fn);bd.append(b);};
   SESS.filter(s=>s.status==='working'||s.status==='waiting').forEach(s=>cell(str(s.name).split(':')[0],openAsk(s)?'caut':'busy',openAsk(s)?'Needs you':'Working',()=>go('crew',{crew:'claude'})));
@@ -512,8 +549,9 @@ V.now=function(m){
 };
 V.crew=function(m){
   if(!need(m,'crew','the crew',4))return;
+  if(S.oc)return ocSession(m);
   if(S.sess)return sessionDetail(m);
-  if(S.agent)return agentDetail(m);
+  if(S.agent){const a=AGENTS.find(x=>x.id===S.agent);return isOC(a)?ocAgent(m,a):agentDetail(m);}
   const desk=isDesk(),cl=MACH.length?ap(h('div','stack'),...MACH.map(machineBlock)):ap(h('div','empty'),h('p','h','No Claude machines.'),h('p',null,'Machines show here once Crew Hub is set up on them.'));
   const ag=agentsBlock(),n=needs().length,al=alertAgents().length;
   m.append(ap(h('div','stack'),h('h1','hero',n?n+(n===1?' session needs':' sessions need')+' you.':'Crew'),h('p','lead',working().length+' Claude sessions working · '+AGENTS.filter(a=>aState(a).c==='run').length+' agents on'+(al?' · '+al+' failed':''))));
@@ -767,11 +805,15 @@ function chatList(){
   /* Claude: two-way sessions only (send + transcript, commands on, not ended); a row without a thread opens one */
   const CS=SESS.filter(chatOk).sort((a,b)=>(tm(b.updatedAt)||0)-(tm(a.updatedAt)||0)),known=new Set(CS.map(s=>s.mk+'/'+s.id));
   const CT=all.filter(t=>isClaude(t)&&!known.has(t.target)&&!MACH.length);   // crew not loaded yet: keep the threads the server listed
-  if(!TH.length&&!CS.length&&!CT.length){L.append(h('p','dim','No chats yet. Ask the crew something, or open an agent\'s Talk.'));return L;}
+  const OCC=ocChats();
+  if(!TH.length&&!CS.length&&!CT.length&&!OCC.length){L.append(h('p','dim','No chats yet. Ask the crew something, or open an agent\'s Talk.'));return L;}
   const row=(title,sub,unread,cur,fn)=>{const b=h('button','cl');b.type='button';b.dataset.title=title.toLowerCase();ap(b,h('span','t',title),countBox(unread||0,false,'unread'),h('span','s',sub));if(cur)b.setAttribute('aria-current','true');b.addEventListener('click',fn);return b;};
-  const groups={},order=[];TH.forEach(t=>{const g=dayName(tWhen(t)||now());if(!groups[g]){groups[g]=[];order.push(g);}groups[g].push(t);});
+  const IT=TH.map(t=>({t,w:tWhen(t)})).concat(OCC).sort((x,y)=>y.w-x.w);
+  const groups={},order=[];IT.forEach(x=>{const g=dayName(x.w||now());if(!groups[g]){groups[g]=[];order.push(g);}groups[g].push(x);});
   order.forEach(g=>{const box=gap(h('div','stack'),'2px');box.append(h('div','grouphd',g));
-    groups[g].forEach(t=>{const b=row(threadTitle(t)+' '+threadName(t),threadSub(t),+t.unread,S.chat===t.id,()=>go('chat',{chat:t.id}));b.firstChild.textContent=threadTitle(t);box.append(b);});L.append(box);});
+    groups[g].forEach(({t,a,s})=>{if(a){const b=row(a.name+' · OpenCode '+ocTitle(s),'',0,false,()=>go('crew',{oc:{a:a.id,s:s.id}}));b.firstChild.textContent=a.name+' · OpenCode';
+        const sub=b.lastChild;sub.textContent='';if(s.needsApproval)ap(sub,h('span','cw','Needs your approval'),' · '+ocTitle(s));else sub.append((s.busy?'Working… · ':'')+ocTitle(s));box.append(b);return;}
+      const b=row(threadTitle(t)+' '+threadName(t),threadSub(t),+t.unread,S.chat===t.id,()=>go('chat',{chat:t.id}));b.firstChild.textContent=threadTitle(t);box.append(b);});L.append(box);});
   if(CS.length||CT.length){const box=gap(h('div','stack'),'2px');box.append(h('div','grouphd','Claude'));
     CS.forEach(s=>{const t=all.find(x=>isClaude(x)&&x.target===s.mk+'/'+s.id);const b=row(s.name+' '+mname(s),claudeSub(s,t),t&&+t.unread,t&&S.chat===t.id,()=>openClaude(s));b.firstChild.textContent=s.name;box.append(b);});
     CT.forEach(t=>{const b=row(threadTitle(t),threadSub(t),+t.unread,S.chat===t.id,()=>go('chat',{chat:t.id}));box.append(b);});L.append(box);}
@@ -1122,9 +1164,156 @@ function lampTest(){if(REDUCE)return;const cells=[...root.querySelectorAll('.ann
   root.classList.add('testing');setTimeout(()=>{root.classList.remove('testing');cells.forEach(c=>c.style.removeProperty('--d'));},760*PACE());}
 new ResizeObserver(()=>{if(isDesk()!==lastDesk)render();}).observe(frame);
 setInterval(()=>{const c=$('clock');if(c)c.textContent=hm(now());const u=$('updated'),at=tm((health().n8n||{}).at);if(u&&at)u.textContent='Updated '+ago(at);
+  const oe=$('oc-el');if(oe&&S.oc0){const el=Math.max(0,Math.round((now()-S.oc0)/1000));oe.textContent=Math.floor(el/60)+':'+p2(el%60);}
   const t=$('think-el');if(t&&S.think0){const el=Math.max(0,Math.round((now()-S.think0)/1000));t.textContent=Math.floor(el/60)+':'+p2(el%60);}
   if(S.sse==='down'&&S.sseDownAt&&now()-S.sseDownAt>3000&&!document.querySelector('.band .num.dim:not(#updated)'))renderBand();},1000);
-document.addEventListener('visibilitychange',()=>{if(!document.hidden&&S.view==='chat')schedule();});
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&S.view==='chat')schedule();if(!document.hidden)ocPoll(true);});
+
+/* ---------- OpenCode agents (docs/BRIDGE.md §14): read through n8n, held in memory only; open pages poll while visible ---------- */
+const ocTitle=s=>str(s&&s.title).replace(/^Bridge:\s*/,'')||'Untitled chat';   // Bridge-started chats are titled "Bridge: <text>"
+const ocUrl=()=>{const u=D.state&&D.state.opencodeUrl;return typeof u==='string'&&/^https?:\/\//i.test(u)?u:null;};   // the add-on's opencode_url option
+const callOf=a=>a.short_name||short(a.name);   // how sentences name it ("the Engineer")
+const capF=s=>s.charAt(0).toUpperCase()+s.slice(1);
+const ORIGIN={bridge:'From the Bridge',ticket:'From a ticket',opencode:'Started in OpenCode'};
+const originW=s=>s?(s.origin==='ticket'&&s.ticketId?'From ticket #'+s.ticketId:ORIGIN[s.origin]||null):null;
+const SPICK=j=>arr(j&&j.sessions),TPICK=j=>(j&&j.session)||null;
+const ocSessions=a=>useSub(D.ocs,a.id,API.ocSessions(a.id),SPICK);
+const ocSessionOf=sid=>useSub(D.oct,sid,API.ocSession(sid),TPICK);
+/* refresh in place: the old copy stays on screen until the new one lands */
+function ocFetch(map,id,url,pick){if(LOADING[url])return;LOADING[url]=true;
+  get(url).then(j=>{map[id]=pick(j);delete ERR[url];},e=>{if(e.status===404)delete map[id];ERR[url]=e;}).finally(()=>{LOADING[url]=false;schedule();});}
+const ocBusySince=a=>{if(a.busySince)return tm(a.busySince);const L=D.ocs[a.id],b=L&&L.find(s=>s.busy);return b?tm(b.busySince||b.updated):null;};
+/* one Bridge-started chat per agent may run (n8n answers 409 agent_busy otherwise) */
+function bridgeRun(a){const L=D.ocs[a.id],b=L?L.find(s=>s.origin==='bridge'&&s.busy):null;if(b)return b;const x=S.ocBusy;return x&&x.a===a.id&&x.s&&now()-x.at<30000?{id:x.s}:null;}
+function ocWord(a){const st=aState(a);if(st.c==='busy'){const t=ocBusySince(a);return'Working'+(t?' · '+span(now()-t):'');}if(st.c==='caut')return'Needs your approval in OpenCode';return st.w;}
+const ocNeeds=()=>AGENTS.filter(a=>isOC(a)&&a.needsApproval&&a.state!=='down');
+function ocNeed(a){const L=ocSessions(a),s=arr(L).filter(x=>x.needsApproval).sort((x,y)=>(tm(x.busySince)||0)-(tm(y.busySince)||0))[0],p=h('section','panel need'),t=s&&tm(s.busySince);
+  ap(p,ap(h('div','row sb'),plate('Needs you'),t?h('span','num dim','Since '+whenShort(t)):null),h('h2','vt',a.name),
+    h('p',null,(s?'“'+ocTitle(s)+'” is':capF(callOf(a))+' is')+' waiting for you to allow a step in OpenCode.'),
+    ap(h('div','keys'),key('Open the chat','',()=>go('crew',s?{oc:{a:a.id,s:s.id}}:{agent:a.id,crew:'agents'})),openOC('')));return p;}
+function ocChats(){const out=[];AGENTS.filter(isOC).forEach(a=>arr(ocSessions(a)).filter(s=>s.origin==='bridge').forEach(s=>out.push({a,s,w:tm(s.updated)||tm(s.busySince)||0})));return out;}
+function ocTalk(a){const b=bridgeRun(a);go('crew',{oc:{a:a.id,s:b?b.id:'new'}});}
+function openOC(cls,label){const u=ocUrl();if(!u)return null;const k=h('a','key ext'+(cls?' '+cls:''),label||'Open OpenCode');k.href=u;k.target='_blank';k.rel='noopener noreferrer';return k;}
+function scopeEl(a){const s=h('div','scope'+(a.role==='home'?' ha':''));
+  s.append(ap(h('p','ok'),h('span','sym','●'),ap(h('span'),h('b',null,'From here: '),'talk, and work in its sandbox.')));
+  if(a.role==='home')s.append(ap(h('p'),h('span','sym ha-b','▲'),ap(h('span'),h('b','ha-b','Every change to Home Assistant asks for approval in OpenCode.'))));
+  s.append(ap(h('p'),h('span','sym','○'),h('span',null,'Going live asks for your approval in OpenCode. The Bridge never answers approvals.')));
+  return s;}
+/* approvals are answered in OpenCode only: a link when opencode_url is set, words when it isn't */
+function approvalBanner(a,txt,what){const k=openOC('lit'),b=banner('caut','▲','Needs your approval in OpenCode',txt,k?ap(h('div','keys'),k):h('span'));
+  if(what)b.children[1].append(h('p','apx',what));return b;}
+const whenShort=ms=>dayKey(ms)===dayKey(now())?hm(ms):dayName(ms)==='Yesterday'?'Yesterday':dmon(ms);
+function sessLi(a,s,cur){const b=h('button','li');b.type='button';b.addEventListener('click',()=>go('crew',{oc:{a:a.id,s:s.id}}));const t=tm(s.updated);
+  const sub=h('span','s');if(s.needsApproval)sub.append(h('span','cw','Needs your approval'),' · ');sub.append([originW(s),s.busy&&!s.needsApproval?'Working · '+span(now()-(tm(s.busySince||s.updated)||now())):null].filter(Boolean).join(' · '));
+  ap(b,pip(s.needsApproval?'caut':s.busy?'busy':'done'),h('span','t',ocTitle(s)),h('span','m',t?whenShort(t):'—'),h('span','go'),sub);if(cur===s.id)b.setAttribute('aria-current','true');return b;}
+function sessList(a,cur,max){const L=ocSessions(a),box=gap(h('div','stack'),'0'),e=ERR[API.ocSessions(a.id)];box.append(grouphd('Sessions'));
+  if(L===undefined){box.append(e?(e.status===404?h('p','dim','OpenCode doesn\'t know this agent.'):errState('the sessions',e)):skel(3));return box;}
+  if(!L.length){box.append(h('p','dim','No sessions yet.'));return box;}
+  box.append(ap(h('div','list'),...L.slice(0,max||8).map(s=>sessLi(a,s,cur))));
+  const f=h('p','dim');f.style.cssText='font-size:13px;padding-top:6px';f.append('Newest first · from OpenCode on the NAS · checked every 30 s');box.append(f);return box;}
+function busyLimit(a,run,lit){return ap(h('div','limit'),ap(h('p'),h('b',null,capF(callOf(a))+' is busy with another Bridge chat'),' · wait or continue that one.'),
+  ap(h('div','keys'),key('Continue that chat',lit?'lit':'',()=>go('crew',{oc:{a:a.id,s:run.id}}))));}
+/* the OpenCode agent page */
+function ocAgent(m,a){
+  const st=aState(a),desk=isDesk(),L=ocSessions(a),run=bridgeRun(a);
+  m.append(crumb('Crew',()=>go('crew',{crew:'agents'}),a.name));
+  m.append(ap(h('div','stack'),ap(h('div','row sb'),h('h1','vt',a.name),tag(pipOf(st.c),st.c==='busy'?ocWord(a):st.w,st.c==='caut'?'caut-t':'')),
+    h('p','lead','OpenCode agent · '+(ROLE[a.role]||'Other'))));
+  const appr=arr(L).find(s=>s.needsApproval);
+  if(appr||a.needsApproval)m.append(approvalBanner(a,(appr?'“'+ocTitle(appr)+'” is':capF(callOf(a))+' is')+' waiting for you to allow a step. Answer it in OpenCode.'));
+  const kv=h('dl','kv'),cur=arr(L).find(s=>s.busy)||null;
+  [['State',ocWord(a)],['On',cur?ocTitle(cur):'Nothing right now'],['Runs in','OpenCode on the NAS'],['ID',a.id]].forEach(([k,v])=>ap(kv,h('dt',null,k),h('dd',null,v)));
+  const pn=gap(ap(h('div','panel'),a.description?h('p','desc',a.description):null),'12px');pn.append(kv);
+  const lit=!appr&&!a.needsApproval;
+  if(a.state==='down')pn.append(h('p','dim','OpenCode isn\'t answering, so new chats can\'t start.'));
+  else if(run){const lm=busyLimit(a,run,lit),nk=key('New chat','');nk.disabled=true;lm.lastChild.append(nk);pn.append(lm);}
+  else pn.append(ap(h('div','keys'),key('New chat',lit?'lit':'',()=>go('crew',{oc:{a:a.id,s:'new'}})),h('span','dim','Talk to '+callOf(a)+' directly.')));
+  pn.append(scopeEl(a));
+  const R=sessList(a,null,8);
+  if(desk)m.append(ap(h('div','cols ocp'),ap(h('div','ocd'),pn),R));else ap(m,pn,R);}
+/* a session: steps are counted by tool name; the live one says what it's doing */
+const TOOLW={read:['Read','files'],grep:['Searched','times'],glob:['Searched','times'],list:['Listed','folders'],edit:['Edited','files'],write:['Wrote','files'],patch:['Edited','files'],bash:['Ran','commands'],webfetch:['Fetched','pages'],task:['Started','helpers'],todowrite:['Updated','to-dos']};
+const LIVEW={read:'Reading a file',grep:'Searching',glob:'Searching',edit:'Editing a file',write:'Writing a file',bash:'Running a command',webfetch:'Fetching a page',deploy:'Going live',homeassistant_write:'Changing Home Assistant',homeassistant:'Changing Home Assistant',shell:'Running a command'};
+function stepsEl(T){const tl=arr(T.tools);if(!tl.length)return null;const done=tl.filter(t=>t.status==='done'||t.status==='error'),cnt={},order=[];
+  done.forEach(t=>{const k=(TOOLW[t.name]||[t.name])[0];if(!(k in cnt)){cnt[k]=0;order.push(k);}cnt[k]++;});
+  const w=h('div','ocsteps'),c=h('div','cnt');order.forEach(k=>c.append(ap(h('span'),k+' ',h('b',null,String(cnt[k])))));
+  const bad=done.filter(t=>t.status==='error').length;
+  if(done.length)w.append(ap(h('span','tool'),pip('done'),h('span',null,done.length+' step'+(done.length===1?'':'s')+(bad?' · '+bad+' failed':''))),c);
+  const live=tl.find(t=>t.status==='pending');
+  if(live&&T.needsApproval)w.append(ap(h('span','tool'),pip('caut'),h('span',null,'Waiting for approval · '+(LIVEW[live.name]||live.name))));
+  return w.childNodes.length?w:null;}
+function ocThread(a,sid,T){
+  const box=gap(h('div','stack conv'),'0'),c=h('div','convo'),url=API.ocSession(sid);c.setAttribute('aria-live','polite');box.append(grouphd('Conversation'));
+  const ld=LOADING[url]||LOADING[API.ocSession(sid,true)];
+  const nt=h('div','fetchln');nt.append(ld?ap(h('span','tag'),pip('busy'),'Asking OpenCode…'):h('span',null,T&&T.busy?'Checks OpenCode every 15 s while open.':'From OpenCode on the NAS; not stored here.'),
+    lnk('Refresh',()=>{ocFetch(D.oct,sid,API.ocSession(sid,true),TPICK);render();}));box.append(nt);
+  if(!T){const e=ERR[url];c.append(e?errState('the chat',e):skel(3));box.append(c);return box;}
+  if(T.clipped)c.append(h('p','st','Older messages are in OpenCode.'));
+  const msgs=arr(T.messages),lastA=msgs.map(x=>x.role).lastIndexOf('assistant'),you=T.origin==='bridge'?'You':T.origin==='ticket'?'Ticket'+(T.ticketId?' #'+T.ticketId:''):'You in OpenCode';
+  msgs.forEach((x,i)=>{if(x.role==='user'){c.append(maskInto(h('div','u'),x.text),h('span','by',[you,tm(x.at)?hm(tm(x.at)):null,i===msgs.length-1&&T.busy?'Delivered':null].filter(Boolean).join(' · ')));}
+    else{const e=h('div','a');e.append(ap(h('span','who',a.name),h('span','num',tm(x.at)?hm(tm(x.at)):'')));str(x.text).split(/\n{2,}/).forEach(p=>e.append(maskInto(h('p','md'),p)));c.append(e);}
+    if(i===lastA||(lastA<0&&i===msgs.length-1)){const s=stepsEl(T);if(s&&(!T.busy||T.needsApproval))c.append(s);}});
+  if(!msgs.length&&!T.busy)c.append(h('p','st','No messages yet.'));
+  if(T.busy&&!T.needsApproval){const lu=[...msgs].reverse().find(x=>x.role==='user'),t0=tm(lu&&lu.at)||tm(T.busySince)||now(),el=Math.max(0,Math.round((now()-t0)/1000));S.oc0=t0;
+    const live=arr(T.tools).find(t=>t.status==='running'),s=stepsEl(T),clk=h('span','num',Math.floor(el/60)+':'+p2(el%60));clk.id='oc-el';
+    const wk=ap(h('div','a work'),ap(h('span','who',a.name)),ap(h('span','tool busy'),pip('busy'),ap(h('span',null,'Working… '),clk,' · you can close the Bridge')));
+    if(live)wk.append(ap(h('span','tool'),pip('done'),h('span',null,'Now: '+(LIVEW[live.name]||live.name))));
+    if(s)wk.append(s);
+    wk.append(h('p','dim','Replies take a few minutes on the local model.'));c.append(wk);}
+  if(T.needsApproval)c.append(approvalBanner(a,capF(callOf(a))+' is waiting for you to allow this step. Answer it in OpenCode.',T.approvalText));
+  box.append(c);
+  if(T.origin==='bridge')box.append(ocComposer(a,sid,T));
+  else if(T.origin==='ticket'&&T.ticketId!=null)box.append(ap(h('div','composer'),ap(h('div','limit'),ap(h('p'),h('b',null,'This chat belongs to ticket #'+T.ticketId),' · the Bridge only continues its own chats.'),
+    ap(h('div','keys'),key('Reply in ticket #'+T.ticketId,'',()=>go('tickets',{ticket:T.ticketId}))))));
+  else{const k=openOC('');box.append(ap(h('div','composer'),ap(h('div','limit'),ap(h('p'),h('b',null,'Started in OpenCode · continue there'),k?null:' · open OpenCode on the NAS.'),k?ap(h('div','keys'),k):null)));}
+  return box;}
+const OC_ERR={agent_busy:null,session_busy:'Still working on your last message · send once it replies',rate_limited:null,not_bridge_session:'Only chats started from the Bridge can be continued here',not_found:'That chat is gone in OpenCode'};
+function ocComposer(a,sid,T){
+  const dk='oc:'+a.id+'/'+sid,cp=h('div','composer'),pn=h('div','panel'),ta=h('textarea');ta.rows=2;ta.maxLength=4000;ta.placeholder='Message '+callOf(a);ta.setAttribute('aria-label','Message '+a.name);bindDraft(ta,dk);
+  const busy=!!(T&&T.busy),lit=!busy&&!(T&&T.needsApproval);
+  const send=()=>{const v=str(S.drafts[dk]).trim();if(!v||busy||S.ocSending)return;S.ocSending=true;
+    post(API.ocSend(a.id),sid==='new'?{text:v}:{text:v,sessionId:sid}).then(j=>{delete S.drafts[dk];S.ocBusy=null;
+        if(D.ocs[a.id]!==undefined)ocFetch(D.ocs,a.id,API.ocSessions(a.id),SPICK);delete D.oct[j.sessionId];if(D.oca)load('oca',true);
+        toast('Sent · '+a.name);go('crew',{oc:{a:a.id,s:j.sessionId}});},
+      e=>{const d=e.data||{};
+        if(e.code==='agent_busy'&&d.sessionId){S.ocBusy={a:a.id,s:d.sessionId,at:now()};toast(capF(callOf(a))+' is busy with another Bridge chat');if(sid!=='new')go('crew',{oc:{a:a.id,s:'new'}});}
+        else if(e.code==='rate_limited')toast('Wait '+Math.max(1,Math.ceil(+d.retryAfter||10))+' s before sending again');
+        else if(OC_ERR[e.code]){toast(OC_ERR[e.code]);if(sid!=='new')ocFetch(D.oct,sid,API.ocSession(sid),TPICK);}
+        else failToast('Not sent',e);}).finally(()=>{S.ocSending=false;render();});};
+  ta.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing){e.preventDefault();send();}});
+  const sk=key('Send',lit?'lit':'',send);sk.disabled=busy;
+  ap(pn,ta,ap(h('div','row sb'),busy?h('span','wait','Send once it replies'):h('span','dim desk-only','Enter sends'),sk));
+  cp.append(pn,h('p','cnote','Goes to '+callOf(a)+' as a message from you (sandbox only).'));return cp;}
+function ocNew(a){const box=gap(h('div','stack conv'),'0'),c=h('div','convo');box.append(grouphd('New chat'));
+  const run=bridgeRun(a);
+  if(run)c.append(busyLimit(a,run,true));
+  else c.append(ap(h('div','ocnew'),h('p','h','Ask '+callOf(a)+' anything.'),h('p',null,'It answers in a new OpenCode chat. Replies take a few minutes on the local model; you can close the Bridge.')));
+  box.append(c,ocComposer(a,'new',run?{busy:true}:null));return box;}
+function ocSession(m){
+  const a=AGENTS.find(x=>x.id===S.oc.a);if(!a||!isOC(a)){m.append(ap(h('div','empty'),h('p','h','That agent is gone.'),key('Back to Crew','',()=>go('crew',{crew:'agents'}))));return;}
+  const sid=S.oc.s,L=ocSessions(a),s=arr(L).find(x=>x.id===sid),st=aState(a);
+  const T=sid==='new'?null:ocSessionOf(sid),e=sid==='new'?null:ERR[API.ocSession(sid)];
+  if(sid!=='new'&&!T&&e&&e.status===404){m.append(crumb(a.name,()=>go('crew',{agent:a.id,crew:'agents'}),'Chat'),ap(h('div','empty'),h('p','h','That chat is gone.'),h('p',null,'OpenCode no longer has it.'),key('Back to '+a.name,'',()=>go('crew',{agent:a.id,crew:'agents'}))));return;}
+  const S_=T||s,title=sid==='new'?'New chat':S_?ocTitle(S_):'Chat';
+  m.append(crumb(a.name,()=>go('crew',{agent:a.id,crew:'agents'}),title));
+  const sw=S_&&S_.needsApproval?['caut','Needs you']:S_&&S_.busy?['busy','Working']:['done','Answered'];
+  m.append(ap(h('div','stack'),ap(h('div','row sb'),h('h1','vt',title),sid==='new'||!S_?null:tag(sw[0],sw[1],sw[0]==='caut'?'caut-t':'')),
+    h('p','lead',[a.name,'OpenCode',sid==='new'?ORIGIN.bridge:originW(S_)].filter(Boolean).join(' · '))));
+  const cv=sid==='new'?ocNew(a):ocThread(a,sid,T);
+  if(isDesk()){const side=gap(ap(h('div','ocd ocside'),ap(h('div','panel'),ap(h('div','row sb'),h('b',null,a.name),tag(pipOf(st.c),st.c==='busy'?ocWord(a):st.w,st.c==='caut'?'caut-t':'')),a.description?h('p','dim',a.description):null,scopeEl(a)),sessList(a,sid,6)),'12px');
+    m.append(ap(h('div','cols sessd'),side,cv));}
+  else m.append(cv);}
+/* SSE "opencode" (a send went through): refresh what's on screen */
+function ocChanged(d){if(d.agent&&D.ocs[d.agent]!==undefined)ocFetch(D.ocs,d.agent,API.ocSessions(d.agent),SPICK);
+  if(d.sessionId&&D.oct[d.sessionId]!==undefined)ocFetch(D.oct,d.sessionId,API.ocSession(d.sessionId),TPICK);if(D.oca)load('oca',true);}
+/* polls only while the page is visible: an open chat every 15 s, the agents and session lists every 30 s */
+let ocLast=0;
+function ocPoll(force){if(document.hidden||!AGENTS.some(isOC))return;
+  if(S.view==='crew'&&S.oc&&S.oc.s!=='new'&&D.oct[S.oc.s]!==undefined)ocFetch(D.oct,S.oc.s,API.ocSession(S.oc.s),TPICK);
+  if(!force&&now()-ocLast<29000)return;ocLast=now();
+  if(!['now','crew','chat'].includes(S.view))return;
+  if(D.oca)load('oca',true);Object.keys(D.ocs).forEach(id=>ocFetch(D.ocs,id,API.ocSessions(id),SPICK));}
+setInterval(()=>ocPoll(false),15000);
 
 /* ---------- boot ---------- */
 parseRoute();paintScheme();

@@ -422,3 +422,68 @@ button.ag .rep-l{text-decoration:underline;text-underline-offset:4px}
   .cols.sessd .conv .convo{width:100%}
   .cols.sessd .composer .panel,.cols.sessd .cnote{width:100%}
 }
+
+/* ---------- 0.3.0: agents by job + OpenCode pages (design/bridge/categories-opencode) ---------- */
+/* Agents tab: one section per job; the header holds a count summary and lights (caution / warn) in place, never reorders */
+.secs{display:grid;gap:0;min-width:0}
+.sechd{display:flex;align-items:baseline;justify-content:space-between;gap:10px;padding:16px 2px 8px;min-width:0}
+.secs>.sec:first-child .sechd{padding-top:2px}
+.sechd .pl{font:600 13px/1 var(--f-plate);letter-spacing:.14em;text-transform:uppercase;color:var(--dm);white-space:nowrap}
+.sechd .sum{font:400 13px/1 var(--f-data);color:var(--dm);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.sec.caut .sechd .pl,.sec.caut .sechd .hot{color:var(--caut)}
+.sec.warn .sechd .pl,.sec.warn .sechd .hot{color:var(--warn)}
+.sec.caut .list{border-color:color-mix(in srgb,var(--caut) 55%,var(--ln))}
+.sec.warn .list{border-color:color-mix(in srgb,var(--warn) 55%,var(--ln))}
+.sechd .hot::before{content:"▲ "}
+.sec.warn .sechd .hot::before{content:"◆ "}
+/* a row that holds two controls: the row link (stretched over the row) and a small Talk key */
+.li.agr{position:relative;grid-template-columns:auto minmax(0,1fr) auto auto auto;text-align:left}
+.agr .t{background:none;border:0;padding:0;margin:0;color:inherit;font:inherit;font-weight:500;text-align:left;cursor:pointer}
+.agr .t::after{content:"";position:absolute;inset:0}
+.agr .t:focus-visible{outline:none}
+.agr .t:focus-visible::after{outline:2px solid var(--focus);outline-offset:-2px}
+.agr .m{grid-column:3;grid-row:1}
+.agr .m.caut{color:var(--caut)} .agr .m.warn{color:var(--warn)}
+.agr .s{grid-column:2 / 4;grid-row:2}
+.agr .tk{grid-column:4;grid-row:1 / span 2}
+.agr .go{grid-column:5;grid-row:1 / span 2}
+.agr>.pip{grid-row:1}
+.tk{position:relative;z-index:1;font:600 12px/1 var(--f-plate);letter-spacing:.12em;text-transform:uppercase;color:var(--tx);background:var(--pn);border:1px solid var(--ln);border-radius:2px;padding:0 9px;height:30px;display:inline-flex;align-items:center;gap:5px}
+.tk::before{content:"";position:absolute;inset:-8px -5px}
+.tk:hover{border-color:var(--dm)}
+.tk .oc{width:6px;height:6px;border:1px solid currentColor;transform:rotate(45deg)}
+.fold .num,.fold .hid{white-space:nowrap}
+.fold .hid{font:400 13px var(--f-body);color:var(--dm);overflow:hidden;text-overflow:ellipsis;min-width:0}
+/* OpenCode pages */
+.ocd{display:grid;gap:12px;align-content:start;min-width:0}
+.panel .desc{font-size:16px;line-height:1.5}
+.scope{display:grid;gap:4px;border-top:1px solid var(--ln);padding-top:10px;color:var(--dm);font-size:14px}
+.scope p{display:flex;gap:8px;align-items:baseline}
+.scope .sym{font:600 13px var(--f-plate);flex:none;width:12px;text-align:center}
+.scope .ok .sym{color:var(--go)}
+.scope b{color:var(--tx);font-weight:600}
+.scope.ha{border-top-color:color-mix(in srgb,var(--caut) 50%,var(--ln))}
+.scope.ha .ha-b{color:var(--caut)}
+.limit{display:grid;gap:8px;border:1px dashed var(--ln);border-radius:2px;padding:10px 12px;color:var(--dm);font-size:14px}
+.limit b{color:var(--tx);font-weight:600}
+a.key{text-decoration:none;display:inline-flex;align-items:center}
+.ext::after{content:" ↗";letter-spacing:0}
+.lnk.ext{text-decoration:underline}
+.key[disabled]{opacity:.45;cursor:not-allowed}
+.ocrow .s .cw{color:var(--caut)}
+.ocsteps{display:grid;gap:6px;padding-left:2px}
+.ocsteps .cnt{display:flex;flex-wrap:wrap;gap:4px 14px;font:400 13px/1.4 var(--f-data);color:var(--dm)}
+.ocsteps .cnt b{font-weight:500;color:var(--tx)}
+.convo .work{display:grid;gap:6px}
+.convo .work .tool{font-size:13px}
+.convo .banner{max-width:64ch}
+.ocnew{display:grid;gap:6px;justify-items:center;text-align:center;padding:28px 0 8px;color:var(--dm)}
+.ocnew .h{color:var(--tx);font:500 17px var(--f-data)}
+.composer .row .wait{font-size:14px;color:var(--dm)}
+@container bridge (min-width:960px){
+  .cols.ocp{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:24px}
+  .cols.sessd .ocside .list{max-width:none}
+}
+.cl .s .cw{color:var(--caut)} .cl .s .cw::before{content:"▲ "}
+/* the step OpenCode asks to allow ("shell: read …"), as sent */
+.banner .apx{font:400 13px/1.45 var(--f-data);overflow-wrap:anywhere;color:var(--tx)}

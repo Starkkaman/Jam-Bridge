@@ -14,8 +14,9 @@ from .conversation import CURSOR_RE, GONE_ERRORS, ConversationError
 from .crew import COMMAND_ACTIONS, CrewError
 from .db import RETRYABLE, THEMES, TICKET_STATUSES, USER_TEXT_MAX
 from .n8n import N8nError
+from . import opencode as oc_mod
 
-APP_VERSION = "0.2.2"
+APP_VERSION = "0.3.0"
 
 APPROVE_COMMENT = "Approved"
 LIMITS = {"title": 120, "details": 4000, "comment": 4000, "resolution": 2000}
@@ -40,11 +41,12 @@ NOT_ADMIN = "Open The Bridge from Home Assistant as an admin to make changes"
 
 
 class ApiError(Exception):
-    def __init__(self, status, code, message):
+    def __init__(self, status, code, message, extra=None):
         super().__init__(message)
         self.status = status
         self.code = code
         self.message = message
+        self.extra = extra  # more fields for the error body (OpenCode's busy answers carry sessionId)
 
 
 def _k(name):
@@ -290,7 +292,7 @@ async def get_state(request):
         "version": APP_VERSION, "user": user.as_dict(), "serverTime": clock.now_ms(),
         "health": {"n8n": n8n_health(n8n), "crew": crew_health(crew)},
         "unread": await unread(db, user), "settings": await user_settings(db, user),
-        "applyJob": _job_view(jobs.apply_job)})
+        "applyJob": _job_view(jobs.apply_job), "opencodeUrl": request.app[_k("K_CFG")].opencode_url})
 
 
 def _job_view(job):
@@ -313,7 +315,7 @@ async def get_overview(request):
         "needsYou": {
             "claude": waiting,
             "problems": status.get("problems") or [],
-            "agents": [a for a in agents if a.get("state") in ("error", "down")],
+            "agents": [a for a in agents if a.get("state") in ("error", "down") and not agents_mod.is_sandbox(a)],
             "tickets": await db.a("tickets_with_new_agent_comment", user.id),
             "ticketsNeedYou": await db.a("tickets_needing_you"),
             "findings": sum(1 for f in (lib or {}).get("findings", []) if not f["applied"]),
@@ -327,6 +329,7 @@ async def get_crew(request):
     status, cache = await cached_status(db)
     return web.json_response({"connected": crew.connected, "at": crew.connected_at, "machines": crew.machines,
                               "agents": agents_mod.grouped(status), "agentsAt": (cache or {}).get("at"),
+                              "sandboxHidden": agents_mod.sandbox_hidden(status),
                               "n8n": n8n_health(n8n)})
 
 
@@ -555,6 +558,194 @@ async def post_conversation_close(request, body, user):
     machine, session = _session_target(request)
     conversations(request).drop(f"{machine}/{session}")
     return web.json_response({"ok": True})
+
+
+# ---- OpenCode agents (through n8n, in memory only, docs/BRIDGE.md §14) ---------------------------------------------
+OC_ORIGIN_REFUSAL = {
+    "ticket": "This chat comes from a ticket. Reply in ticket #{ticket}.",
+    "opencode": "This chat was started in OpenCode. Continue it there.",
+}
+OC_BUSY = {"agent_busy": "{name} is busy with another Bridge chat. Wait, or continue that one.",
+           "session_busy": "{name} is still working on this chat. Send once it replies."}
+
+
+def opencode(request):
+    return request.app[_k("K_OC")]
+
+
+def _oc_fresh(request):
+    return request.query.get("fresh") == "1"
+
+
+def _oc_not_found(err):
+    """n8n's 400 "session <id> not found" (or a 404): an expected state, not an n8n failure."""
+    return err.code == "http" and err.status in (400, 404) and (
+        err.status == 404 or oc_mod.NOT_FOUND_RE.search(err.message or ""))
+
+
+def _oc_out(out, name):
+    data = out.pop("data")
+    out[name] = data
+    return out
+
+
+async def get_oc_agents(request):
+    """api/opencode/agents[?fresh=1] -> {agents, at, cached[, stale, error]} (30 s, shared by every viewer)."""
+    try:
+        out = await opencode(request).agents(_oc_fresh(request))
+    except N8nError as err:
+        raise n8n_error(err) from None
+    return web.json_response(_oc_out(out, "agents"))
+
+
+async def get_oc_sessions(request):
+    """api/opencode/agents/{id}/sessions[?fresh=1] -> {agent, sessions, at, cached} (30 s)."""
+    aid = request.match_info["aid"]
+    if not oc_mod.OC_ID_RE.match(aid):
+        raise ApiError(404, "not_found", "No such OpenCode agent")
+    try:
+        out = await opencode(request).sessions(aid, _oc_fresh(request))
+    except N8nError as err:
+        if err.code == "http" and err.status in (400, 404):
+            raise ApiError(404, "not_found", "OpenCode has no agent " + aid) from None
+        raise n8n_error(err) from None
+    out["agent"] = aid
+    return web.json_response(_oc_out(out, "sessions"))
+
+
+async def get_oc_session(request):
+    """api/opencode/sessions/{id}[?fresh=1] -> the session (15 s). Admins only, like Claude conversations; audited."""
+    db = ctx(request)[0]
+    user = req_user(request)
+    if not user.can_write:
+        raise ApiError(403, "not_admin", "Open The Bridge from Home Assistant as an admin to read OpenCode chats")
+    sid = request.match_info["sid"]
+    if not oc_mod.OC_SESSION_RE.match(sid):
+        raise ApiError(404, "not_found", "No such session")
+    fresh = _oc_fresh(request)
+    what = "refresh" if fresh else "open"
+    try:
+        out = await opencode(request).session(sid, fresh)
+    except N8nError as err:
+        if _oc_not_found(err):
+            await audit(db, user, "opencode.session", sid, what, "refused", "not_found")
+            raise ApiError(404, "not_found", "OpenCode has no session " + sid) from None
+        await audit(db, user, "opencode.session", sid, what, "timeout" if err.code == "timeout" else "error", err.code)
+        raise n8n_error(err) from None
+    if out["data"] is None:
+        raise ApiError(502, "n8n_bad_json", "n8n sent something that is not a session")
+    await audit(db, user, "opencode.session", sid, what + (" · cached" if out["cached"] else ""),
+                "stale" if out.get("stale") else "ok")
+    out = _oc_out(out, "session")
+    out["session"] = {**out["session"], "writable": out["session"]["origin"] == "bridge"}
+    return web.json_response(out)
+
+
+async def _oc_agent(request, aid):
+    """The agent as n8n's status lists it (kind "opencode agent"), else as bridge/opencode/agents lists it; 404."""
+    status, _ = await cached_status(db_of(request))
+    a = agents_mod.find_agent(status, aid)
+    if a is not None:
+        return a
+    try:
+        listed = (await opencode(request).agents())["data"]
+    except N8nError:
+        listed = []
+    a = next((x for x in listed if x["id"] == aid), None)
+    if a is None:
+        raise ApiError(404, "not_found", "No such OpenCode agent")
+    return a
+
+
+def db_of(request):
+    return ctx(request)[0]
+
+
+def _oc_name(agent):
+    name = str(agent.get("short_name") or agent.get("name") or "The agent")
+    return name[:1].upper() + name[1:]
+
+
+@write()
+async def post_oc_message(request, body, user):
+    """{text, sessionId?, clientId} -> {ok, sessionId}. Only Bridge-started sessions take messages (403 before n8n);
+    one send per 10 s per user (429); n8n's busy answers become 409 agent_busy / session_busy with sessionId."""
+    db, n8n, crew, jobs, hub, clock = ctx(request)
+    oc = opencode(request)
+    aid = request.match_info["aid"]
+    if not oc_mod.OC_ID_RE.match(aid):
+        raise ApiError(404, "not_found", "No such OpenCode agent")
+    text = clean_text(body.get("text"), "text", oc_mod.TEXT_MAX, required=True)
+    sid = body.get("sessionId")
+    if sid is not None and (not isinstance(sid, str) or not oc_mod.OC_SESSION_RE.match(sid)):
+        raise ApiError(400, "invalid", "sessionId is not a valid session id")
+    agent = await _oc_agent(request, aid)
+    if sid is not None:
+        try:
+            s = (await oc.session(sid))["data"] or {}
+        except N8nError as err:
+            if _oc_not_found(err):
+                raise ApiError(404, "not_found", "OpenCode has no session " + sid) from None
+            raise n8n_error(err) from None
+        if s.get("agent") and s["agent"] != aid:
+            raise ApiError(404, "not_found", "That session belongs to another agent")
+        if s.get("origin") != "bridge":
+            await audit(db, user, "opencode.message", aid, f"session {sid}", "refused", "not_bridge_session")
+            msg = OC_ORIGIN_REFUSAL.get(s.get("origin"), OC_ORIGIN_REFUSAL["opencode"]).format(
+                ticket=s.get("ticketId") or "?")
+            raise ApiError(403, "not_bridge_session", msg, {"origin": s.get("origin"), "ticketId": s.get("ticketId")})
+    action_id, existing = await db.a("begin_action", user, "opencode.message", aid,
+                                     f"session {sid}" if sid else "new chat", body["clientId"])
+    if existing is not None:
+        return web.json_response({"ok": existing.get("outcome") == "ok", "duplicate": True,
+                                  "sessionId": oc.sent.get(body["clientId"]), "error": existing.get("error")})
+    left = oc.wait_left(user.id)
+    if left > 0:
+        await db.a("finish_action", action_id, "refused", "rate_limited")
+        raise ApiError(429, "rate_limited", f"One message every {oc_mod.SEND_EVERY} s. Try again in a moment.",
+                       {"retryAfter": max(1, round(left))})
+    oc.mark_sent(user.id)
+    payload = {"agent": aid, "text": text, "author": user.display}
+    if sid:
+        payload["sessionId"] = sid
+    name = _oc_name(agent)
+
+    async def refused(code, error, data):
+        oc.unmark(user.id)  # nothing reached OpenCode: the user may send again now
+        oc.forget(aid, sid)
+        await db.a("finish_action", action_id, "refused", code)
+        busy_sid = (data or {}).get("sessionId")
+        extra = {"sessionId": busy_sid} if isinstance(busy_sid, str) and oc_mod.OC_SESSION_RE.match(busy_sid) else None
+        if code in oc_mod.BUSY_ERRORS:
+            raise ApiError(409, code, OC_BUSY[code].format(name=name), extra)
+        if oc_mod.NOT_FOUND_RE.search(error or ""):
+            raise ApiError(404, "not_found", error)
+        if "started from the bridge" in (error or "").lower():
+            raise ApiError(403, "not_bridge_session", error)
+        raise ApiError(409, "refused", error)
+
+    try:
+        res = await n8n.oc_message(payload)
+    except N8nError as err:
+        if err.code == "http" and err.status in (400, 409):
+            code = str((err.data or {}).get("error") or "")
+            await refused(code, err.message, err.data)
+        if err.code != "timeout":
+            oc.unmark(user.id)
+        await db.a("finish_action", action_id, "timeout" if err.code == "timeout" else "error", err.message)
+        raise n8n_error(err) from None
+    if isinstance(res, dict) and res.get("ok") is False:
+        code = str(res.get("error") or "refused")[:300]
+        await refused(code, "n8n: " + code, res)
+    new_sid = res.get("sessionId") if isinstance(res, dict) else None
+    if not isinstance(new_sid, str) or not oc_mod.OC_SESSION_RE.match(new_sid):
+        await db.a("finish_action", action_id, "error", "no sessionId")
+        raise ApiError(502, "n8n_bad_result", "n8n didn't say which session got the message")
+    await db.a("finish_action", action_id, "ok")
+    oc.remember(body["clientId"], new_sid)
+    oc.forget(aid, new_sid)
+    hub.publish("opencode", {"agent": aid, "sessionId": new_sid})
+    return web.json_response({"ok": True, "sessionId": new_sid})
 
 
 async def get_library(request):
@@ -1042,6 +1233,10 @@ def register(app):
     r.add_get("/api/agents/{aid}/output", get_agent_output2)
     r.add_get("/api/sessions/{machine}/{session}/conversation", get_conversation)
     r.add_post("/api/sessions/{machine}/{session}/conversation/close", post_conversation_close)
+    r.add_get("/api/opencode/agents", get_oc_agents)
+    r.add_get("/api/opencode/agents/{aid}/sessions", get_oc_sessions)
+    r.add_post("/api/opencode/agents/{aid}/messages", post_oc_message)
+    r.add_get("/api/opencode/sessions/{sid}", get_oc_session)
     r.add_get("/api/library", get_library)
     r.add_get("/api/library/precheck", get_precheck)
     r.add_post("/api/library/apply", post_apply)

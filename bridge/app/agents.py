@@ -8,6 +8,22 @@ STOP_WORDS = frozenset({"agent", "the", "a"})
 AGENT_ID_RE = re.compile(r"^(n8n|svc|claude):[\w:.-]{1,80}$")
 
 
+# Agents tab sections (docs/BRIDGE.md §14), in this order; any other role (or none) is "other"; "system" is last, folded
+JOBS = ("engineering", "home", "security", "downloads", "library", "general", "service")
+SANDBOX_RE = re.compile(r"^SANDBOX:", re.I)
+
+
+def is_sandbox(agent):
+    return bool(SANDBOX_RE.match(str((agent or {}).get("name") or "")))
+
+
+def job_of(agent):
+    role = agent.get("role")
+    if role == "system" or (not role and group_of(agent) == "system"):
+        return "system"
+    return role if role in JOBS else "other"
+
+
 def group_of(agent):
     name = agent.get("name") or ""
     if name in SYSTEM_NAMES or name.startswith(SYSTEM_PREFIXES):
@@ -42,14 +58,19 @@ def rerun_plan(agent):
 
 
 def grouped(status):
+    """agents / services / system, each agent with its `job` section; SANDBOX:* copies are left out (only counted)."""
     out = {"agents": [], "services": [], "system": []}
     for a in (status or {}).get("agents") or []:
-        if isinstance(a, dict) and a.get("id"):
+        if isinstance(a, dict) and a.get("id") and not is_sandbox(a):
             g = group_of(a)
             plan = rerun_plan(a)
-            out[g].append({**a, "group": g, "hasRuns": g != "system" and bool(a.get("workflowId")),
+            out[g].append({**a, "group": g, "job": job_of(a), "hasRuns": g != "system" and bool(a.get("workflowId")),
                            "canRerun": plan is not None, "rerunHint": plan[1] if plan else None})
     return out
+
+
+def sandbox_hidden(status):
+    return sum(1 for a in (status or {}).get("agents") or [] if isinstance(a, dict) and is_sandbox(a))
 
 
 def find_agent(status, agent_id):

@@ -44,6 +44,7 @@ class Config:
     data_dir: pathlib.Path = pathlib.Path("/data")
     n8n_url: str | None = None
     n8n_key: str | None = field(default=None, repr=False)
+    opencode_url: str | None = None  # the "Open OpenCode" link (new tab); optional
     log_level: str = "info"
     core_ws_url: str = CORE_WS
     allow: frozenset = field(default_factory=lambda: parse_ips(DEFAULT_ALLOW))
@@ -76,6 +77,7 @@ def load_config(env=None) -> Config:
     cfg.n8n_url = normalize_n8n_url(raw_url)
     if cfg.n8n_url is None:
         cfg.config_error = "n8n_url is not set" if not raw_url else "n8n_url is not a valid http(s) URL"
+    cfg.opencode_url = normalize_n8n_url(env.get("BRIDGE_OPENCODE_URL", options.get("opencode_url")))
     key = env.get("BRIDGE_N8N_KEY", options.get("n8n_key"))
     cfg.n8n_key = key if isinstance(key, str) and key.strip() else None
     level = str(env.get("BRIDGE_LOG_LEVEL", options.get("log_level") or "info")).lower()

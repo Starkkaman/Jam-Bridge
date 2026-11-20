@@ -111,7 +111,7 @@ applied[]}`, `job {id, kind, state, detail}`, and a `: ping` comment every 20 s 
 `hello` makes the page refetch its view. "Visible" (§7) means at least one SSE stream is open.
 
 ## 7. n8n adapter (`n8n.py`)
-- **Allow-list by construction** (like Callsheet's `ha.py`): only the 13 (method, path) pairs of the NAS contract under `n8n_url`.
+- **Allow-list by construction** (like Callsheet's `ha.py`): only the 18 (method, path) pairs of the NAS contract (§14 adds the four OpenCode ones) under `n8n_url`.
   No redirects, no secrets, bodies ≤1 MB (status 2 MB). The first response after a start is logged once (HTTP status only) as
   `n8n.firstContact`, which settles verification 4. Timeouts: GETs 15 s, chat **120 s**, ticket POSTs 20 s, apply **900 s**.
   One request in flight per endpoint (shared; a tick is skipped while the previous call is open). Errors: agent-hub/status retries
@@ -331,3 +331,57 @@ The page builds the Claude group from the live sessions. A session without a thr
 Only what the user sends is stored. The pre-0.2.0 status rows (a session's summary saved when it went idle) are gone.
 Crew shows "Can't chat: <reason>" for sessions and agents that aren't two-way (ended, commands off, can't take
 messages, older Crew Hub without transcript; for agents the reason comes from `chat_note` or a table in the page).
+
+## 14. Agents by job and OpenCode agents (0.3.0)
+
+Design: design/bridge/categories-opencode (mockup, notes, screenshots), approved by Isaac as shown, with one change:
+agents that are off but can chat keep their TALK key (§13 decision 3).
+
+**Agents tab.** Sections in a fixed order from `role`: Engineering (`engineering`), Home (`home`), Security
+(`security`), Downloads (`downloads`), Library & media (`library`), Assistants (`general`), Infrastructure
+(`service`), Other (any other role, or none), then System (`system`, or no role and a system name) folded. Empty
+sections are hidden. The header has a count summary; a failing agent (◆, warn) or one that needs you (▲, caution)
+lights the header and the list edge in place, never reordering. Agents whose name starts with `SANDBOX:` never enter
+the list or any count (Now included); the System fold says "+N sandbox copies hidden". Talkable rows (`chat: true`,
+and every OpenCode agent) carry a TALK key, ◇ for OpenCode, whether the agent is on or off.
+
+**OpenCode agents** are `agent-hub/status` rows with `kind: "opencode agent"`, ids `oc:*`, `role` engineering|home,
+`chat: true`, `rerun: false`, `state` ok|running|down and `task` "<title> since …". Their live fields come from n8n:
+
+| n8n endpoint | Answer |
+|---|---|
+| `GET bridge/opencode/agents` | `{agents: [{id, name, short_name, description, role, busy, busySince, needsApproval, lastSession: {id, title, updated} \| null}]}` |
+| `GET bridge/opencode/sessions?agent=&limit=20` | `{sessions: [{id, title, updated, busy, busySince, needsApproval, origin: "bridge" \| "ticket" \| "opencode", ticketId}]}`, newest first; `limit` 1-100 (default 20) |
+| `GET bridge/opencode/session?id=` | `{id, agent, title, origin, ticketId, busy, busySince, needsApproval, approvalText, messages: [{role, text, at}], tools: [{name, status: "done" \| "running" \| "pending" \| "error", at}]}` |
+| `POST bridge/opencode/message {agent, text ≤ 4000, author, sessionId?}` | `{ok: true, sessionId}`; 409 `{ok: false, error: "agent_busy", sessionId}` (a Bridge chat of this agent is running) or `{ok: false, error: "session_busy", sessionId}`; 400 `{ok: false, error}` (validation, "session <id> not found", "only sessions started from The Bridge can be continued here; …") |
+
+Bridge-started sessions are titled "Bridge: <first 60 characters>"; the page drops the prefix. `approvalText` is a short
+machine line ("shell: read /workspace/…", ≤ 300 characters) shown in monospace. Timeouts: agents and sessions 15 s,
+session 20 s, message 30 s. A 4xx from these endpoints is an answer, so n8n's health stays green.
+
+**Add-on endpoints** (relative, ingress only):
+
+| Endpoint | Cache | Notes |
+|---|---|---|
+| `GET api/opencode/agents[?fresh=1]` | 30 s | `{agents, at, cached[, stale, error]}` |
+| `GET api/opencode/agents/{id}/sessions[?fresh=1]` | 30 s per agent | 404 `not_found` for a bad or unknown id |
+| `GET api/opencode/sessions/{id}[?fresh=1]` | 15 s | Admins only (403 `not_admin`), audited `opencode.session`. Adds `writable` (origin is `bridge`). n8n's "not found" is 404 `not_found` |
+| `POST api/opencode/agents/{id}/messages {text, sessionId?, clientId}` | n/a | `@write` (X-Bridge, admin HA user, clientId dedupe). A `sessionId` whose origin isn't `bridge` is refused 403 `not_bridge_session` before n8n is asked. One send per 10 s per user (429 `rate_limited`, `retryAfter`). n8n's busy answers become 409 `agent_busy` / `session_busy` with `sessionId`; other refusals 404 `not_found`, 403 `not_bridge_session` or 409 `refused`. `author` is the HA user's display name. Audit row `opencode.message` (target the agent, summary "new chat" or "session <id>", never the text). SSE `opencode {agent, sessionId}` tells other pages to refresh. |
+
+The caches live in `opencode.py`, in process memory only: shared by every viewer, `fresh` asks n8n again only when the
+copy is at least 5 s old, entries go after 120 s, when the last page disconnects and on restart. **Transcripts are never
+stored**: nothing from a session reaches SQLite, the snapshot, the SSE stream or the audit (a test greps for a sentinel).
+`api/state` carries `opencodeUrl` (the `opencode_url` option, optional).
+
+**Pages.** `#agent/oc:<id>`: description, kv (State, On, Runs in, ID), New chat (or, while a Bridge chat of this agent
+runs, "<short name> is busy with another Bridge chat · wait or continue that one" with Continue that chat), a scope box
+(talk + sandbox; going live asks for approval in OpenCode; the HA builder adds "Every change to Home Assistant asks for
+approval in OpenCode"), Sessions with their origin, "checked every 30 s". `#oc/<agent>/<session|new>`: bubbles, steps as
+counts by tool name, "Working… m:ss · you can close the Bridge" from `busySince`, Send off while busy, "Goes to <short
+name> as a message from you (sandbox only)". A ticket session shows "Reply in ticket #N" (to the ticket), an
+OpenCode-started one "Started in OpenCode · continue there". `needsApproval` shows a caution banner with `approvalText`
+and **Open OpenCode ↗** (new tab, `rel=noopener`) when `opencode_url` is set, else "Answer it in OpenCode." The Bridge
+has no interrupt and never answers approvals. Chat lists Bridge-origin OpenCode chats as "<name> · OpenCode" (Working… /
+▲ Needs your approval); opening one goes to its Crew page. Now's needs-you lists OpenCode agents waiting for approval
+after Claude prompts and tickets. Polling, only while the page is visible: agents 30 s (Now, Crew, Chat), the open
+agent's sessions 30 s, the open session 15 s.

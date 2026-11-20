@@ -20,7 +20,7 @@ UV_LINK_MODE=copy uv pip install --python /home/user/.local/opt/bridge-test-venv
 |---|---|
 | **8099** | The Bridge, `http://127.0.0.1:8099/` (dev mode: a request without `X-Remote-User-*` acts as the admin "Alex") |
 | 8100 | Mini ingress proxy, `http://127.0.0.1:8100/api/hassio_ingress/dev-token/` (strips the prefix, injects the user headers like the Supervisor, streams SSE): use it to check that every URL is relative |
-| 8098 | Fake n8n (`tests/bridge/fixtures/n8n/*.json`; chat echoes; library findings 14-25 start unapplied) |
+| 8098 | Fake n8n (`tests/bridge/fixtures/n8n/*.json`; chat echoes; library findings 14-25 start unapplied; OpenCode agents with made-up sessions, `GET /fake/opencode/scene?name=default\|bridge-busy\|approval` switches them) |
 | 8097 | Fake Core websocket (`card/fixtures/snapshot-sample.json`) |
 
 Flags: `--port N` (the others follow: N-1, N-2, N+1), `--data DIR` (default: a new temp folder, so each run starts
@@ -37,7 +37,7 @@ BRIDGE_CORE_WS=ws://127.0.0.1:8097/core/websocket SUPERVISOR_TOKEN=dev-token \
 ```
 
 Environment overrides (dev and tests only; the add-on reads `/data/options.json`): `BRIDGE_DATA`, `BRIDGE_OPTIONS`,
-`BRIDGE_N8N_URL`, `BRIDGE_N8N_KEY`, `BRIDGE_CORE_WS`, `BRIDGE_DEV=1` (trust user headers from loopback, default user),
+`BRIDGE_N8N_URL`, `BRIDGE_N8N_KEY`, `BRIDGE_OPENCODE_URL` (the Open OpenCode link), `BRIDGE_CORE_WS`, `BRIDGE_DEV=1` (trust user headers from loopback, default user),
 `BRIDGE_TIME_SCALE`, `BRIDGE_LOG_LEVEL`.
 
 ## Tests

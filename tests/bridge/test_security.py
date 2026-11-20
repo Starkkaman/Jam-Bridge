@@ -181,6 +181,7 @@ def test_config_yaml():
     assert cfg["options"]["n8n_url"] is None  # required, no default: no LAN address in this public repo
     assert cfg["schema"]["n8n_url"] == "url"
     assert cfg["schema"]["n8n_key"] == "password?"
+    assert cfg["schema"]["opencode_url"] == "url?" and "opencode_url" not in cfg["options"]  # optional, no default
     assert "n8n_key" not in cfg["options"]
     changelog = (ROOT / "bridge" / "CHANGELOG.md").read_text()
     assert f"## {api.APP_VERSION}" in changelog

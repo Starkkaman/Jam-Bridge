@@ -24,6 +24,7 @@ from .crew import Crew
 from .db import DB
 from .jobs import Jobs
 from .n8n import N8n
+from .opencode import OpenCode
 
 LOG = logging.getLogger("bridge")
 HERE = pathlib.Path(__file__).resolve().parent
@@ -44,6 +45,7 @@ K_N8N = web.AppKey("n8n", object)
 K_CREW = web.AppKey("crew", object)
 K_JOBS = web.AppKey("jobs", object)
 K_CONV = web.AppKey("conversations", object)
+K_OC = web.AppKey("opencode", object)
 K_HUB = web.AppKey("hub", object)
 K_CLOCK = web.AppKey("clock", object)
 K_STATIC = web.AppKey("static", object)
@@ -138,8 +140,8 @@ class Hub:
 
 
 # ---- middlewares ------------------------------------------------------------------------------------------------------
-def json_error(status, code, message):
-    return web.json_response({"error": message, "code": code}, status=status)
+def json_error(status, code, message, extra=None):
+    return web.json_response({**(extra or {}), "error": message, "code": code}, status=status)
 
 
 @web.middleware
@@ -166,7 +168,7 @@ async def security_mw(request, handler):
             else:
                 resp = json_error(exc.status, exc.reason.lower().replace(" ", "_"), exc.reason)
         except api.ApiError as exc:
-            resp = json_error(exc.status, exc.code, exc.message)
+            resp = json_error(exc.status, exc.code, exc.message, exc.extra)
         except Exception:  # noqa: BLE001
             LOG.exception("unhandled error on %s %s", request.method, request.path)
             resp = json_error(500, "internal", "Internal error")
@@ -258,10 +260,13 @@ def build_app(cfg, clock=None, pollers=True, connect_crew=True, static_dir=None,
     app[K_JOBS] = jobs
     conv = Conversations(crew, clock)  # Claude conversations: process memory only, <= 60 s, never in SQLite
     app[K_CONV] = conv
+    oc = OpenCode(n8n, clock)  # OpenCode agents and sessions: process memory only, never in SQLite
+    app[K_OC] = oc
 
     def on_visibility(visible):
         if not visible:  # the last page went away (SSE unsubscribe): forget every conversation now
             conv.clear()
+            oc.clear()
         jobs.on_visibility(visible)
 
     hub.on_visibility = on_visibility
@@ -284,6 +289,7 @@ def build_app(cfg, clock=None, pollers=True, connect_crew=True, static_dir=None,
         with contextlib.suppress(asyncio.CancelledError, Exception):
             await app[K_SWEEP]
         conv.clear()
+        oc.clear()
         await jobs.stop()
         await crew.stop()
         await n8n.close()
